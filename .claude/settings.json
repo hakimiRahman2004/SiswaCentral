@@ -1,0 +1,100 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /c/laragon/www/group_ims566/.claude/ponytail/hooks/ponytail-activate.js",
+            "timeout": 5,
+            "statusMessage": "🐴 Loading ponytail mode..."
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /c/laragon/www/group_ims566/.claude/ponytail/hooks/ponytail-subagent.js",
+            "timeout": 5,
+            "statusMessage": "🐴 Loading ponytail mode..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /c/laragon/www/group_ims566/.claude/ponytail/hooks/ponytail-mode-tracker.js",
+            "timeout": 5,
+            "statusMessage": "🐴 Tracking ponytail mode..."
+          }
+        ]
+      }
+    ]
+  },
+  "skills": [
+    {
+      "name": "banner-design",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/banner-design/SKILL.md"
+    },
+    {
+      "name": "brand",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/brand/SKILL.md"
+    },
+    {
+      "name": "design",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/design/SKILL.md"
+    },
+    {
+      "name": "design-system",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/design-system/SKILL.md"
+    },
+    {
+      "name": "slides",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/slides/SKILL.md"
+    },
+    {
+      "name": "ui-styling",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/ui-styling/SKILL.md"
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "path": "C:/project/group_ims566/.claude/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/SKILL.md"
+    },
+    {
+      "name": "ponytail",
+      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail/SKILL.md"
+    },
+    {
+      "name": "ponytail-review",
+      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-review/SKILL.md"
+    },
+    {
+      "name": "ponytail-audit",
+      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-audit/SKILL.md"
+    },
+    {
+      "name": "ponytail-debt",
+      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-debt/SKILL.md"
+    },
+    {
+      "name": "ponytail-gain",
+      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-gain/SKILL.md"
+    },
+    {
+      "name": "ponytail-help",
+      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-help/SKILL.md"
+    }
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(npx @tailwindcss/cli -i public/css/input.css -o public/css/output.css)"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+    "name": "siswacentral/siswacentral",
+    "description": "Centralized scholarship platform",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        },
+        "files": [
+            "app/Core/env.php",
+            "app/Core/helpers.php"
+        ]
+    },
+    "require": {
+        "php": ">=8.0"
+    }
+}

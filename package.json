@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "build:css": "tailwindcss -i public/css/input.css -o public/css/output.css",
+    "watch:css": "tailwindcss -i public/css/input.css -o public/css/output.css --watch"
+  },
+  "dependencies": {
+    "@dietrichgebert/ponytail": "^4.8.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "tailwindcss": "^4.3.2"
+  }
+}

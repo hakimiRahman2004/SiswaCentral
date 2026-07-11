@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tailwindcss *)",
+      "Bash(grep *)",
+      "Bash(mysql *)",
+      "Bash(php -l app/Controllers/StudentController.php)",
+      "Bash(php -l app/Controllers/StudentSubscriptionController.php)",
+      "Bash(php -l app/Repositories/StudentSubscriptionRepository.php)",
+      "Bash(php -l routes/web.php)",
+      "Bash(php -l app/Helpers/PlanGuard.php)",
+      "Bash(php -l app/Middleware/PlanMiddleware.php)",
+      "Bash(php -l app/Repositories/SupportTicketRepository.php)",
+      "Bash(python *)"
+    ]
+  }
+}
