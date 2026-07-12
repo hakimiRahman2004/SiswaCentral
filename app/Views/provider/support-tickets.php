@@ -16,7 +16,7 @@ $title = 'Support Tickets';
 
     <div class="card-hover p-5 mb-6">
         <h2 class="font-semibold text-surface-800 text-sm mb-4">Open a New Ticket</h2>
-        <form method="POST" action="<?= url('/provider/support-tickets') ?>">
+        <form method="POST" action="<?= url('/provider/support-tickets/create') ?>">
             <?= csrfField() ?>
             <div class="space-y-4">
                 <div><label class="input-label">Subject</label><input type="text" name="subject" class="input" placeholder="Brief summary..." required></div>
@@ -35,8 +35,8 @@ $title = 'Support Tickets';
                 <span class="badge <?= match($t['status']??''){'open'=>'badge-blue','resolved'=>'badge-green','closed'=>'badge-surface', default=>'badge-surface'} ?>"><?= e(ucfirst($t['status'] ?? '')) ?></span>
             </div>
             <p class="text-sm text-surface-600"><?= nl2br(e($t['message'] ?? '')) ?></p>
-            <?php if ($t['reply'] ?? ''): ?>
-            <div class="mt-3 p-3 bg-brand-50 rounded-xl border border-brand-100"><p class="text-xs font-semibold text-brand-700 mb-1">Staff Response</p><p class="text-sm text-brand-800"><?= nl2br(e($t['reply'])) ?></p></div>
+            <?php if ($t['admin_reply'] ?? ''): ?>
+            <div class="mt-3 p-3 bg-brand-50 rounded-xl border border-brand-100"><p class="text-xs font-semibold text-brand-700 mb-1">Staff Response</p><p class="text-sm text-brand-800"><?= nl2br(e($t['admin_reply'])) ?></p></div>
             <?php endif; ?>
             <p class="text-xs text-surface-400 mt-2"><?= date('d M Y, h:i A', strtotime($t['created_at'])) ?></p>
         </div>

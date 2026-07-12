@@ -21,6 +21,7 @@ use App\Repositories\SupportTicketRepository;
 use App\Repositories\FeedbackRepository;
 use App\Repositories\LoginAttemptRepository;
 use App\Repositories\StudentSubscriptionRepository;
+use App\Repositories\NotificationRepository;
 
 class AdminController extends Controller
 {
@@ -37,6 +38,7 @@ class AdminController extends Controller
     private FeedbackRepository $feedbackRepo;
     private LoginAttemptRepository $loginAttemptRepo;
     private StudentSubscriptionRepository $studentSubRepo;
+    private NotificationRepository $notificationRepo;
 
     public function __construct()
     {
@@ -54,6 +56,7 @@ class AdminController extends Controller
         $this->feedbackRepo = new FeedbackRepository();
         $this->loginAttemptRepo = new LoginAttemptRepository();
         $this->studentSubRepo = new StudentSubscriptionRepository();
+        $this->notificationRepo = new NotificationRepository();
     }
 
     // ─── 1. DASHBOARD ───────────────────────────────────────────────────────
@@ -78,6 +81,8 @@ class AdminController extends Controller
             'revenueTrend' => $this->paymentRepo->getRevenueTrend(),
             'bannedUsers' => $this->userRepo->countByStatus('banned'),
             'openTickets' => $this->ticketRepo->count(),
+            'recentTickets' => $this->ticketRepo->getRecent(5),
+            'recentFeedback' => $this->feedbackRepo->getRecent(5),
         ]);
     }
 
@@ -228,12 +233,23 @@ class AdminController extends Controller
     public function scholarships(): void
     {
         $status = $this->input('status');
-        $all = $status ? $this->scholarshipRepo->getByStatus($status) : $this->scholarshipRepo->getAll();
+
+        if ($status === 'pending') {
+            // "Pending Approval" — show both old drafts and new pending submissions
+            $draft = $this->scholarshipRepo->getByStatus('draft');
+            $pending = $this->scholarshipRepo->getByStatus('pending');
+            $all = array_merge($draft, $pending);
+            usort($all, fn($a, $b) => strtotime($b['created_at'] ?? 0) - strtotime($a['created_at'] ?? 0));
+        } else {
+            $all = $status ? $this->scholarshipRepo->getByStatus($status) : $this->scholarshipRepo->getAll();
+        }
+
         $this->view('admin/scholarships', [
             'title' => 'Scholarship Management',
             'scholarships' => $all,
             'totalScholarships' => $this->scholarshipRepo->count(),
             'activeCount' => $this->scholarshipRepo->countByStatus('open'),
+            'pendingCount' => $this->scholarshipRepo->countByStatus('pending') + $this->scholarshipRepo->countByStatus('draft'),
             'draftCount' => $this->scholarshipRepo->countByStatus('draft'),
             'closedCount' => $this->scholarshipRepo->countByStatus('closed'),
             'totalApplicants' => $this->applicationRepo->count(),
@@ -244,9 +260,18 @@ class AdminController extends Controller
     {
         $s = $this->scholarshipRepo->findById($id);
         if (!$s) { $this->notFound(); return; }
+        $documents = $this->scholarshipRepo->getDocuments($id);
+
+        // Get the provider info
+        $provider = $this->providerRepo->findById($s['provider_id']);
+        $providerUserId = $provider ? ($provider['user_id'] ?? null) : null;
+
         $this->view('admin/scholarship_detail', [
             'title' => "Scholarship: {$s['name']}",
             's' => $s,
+            'documents' => $documents,
+            'provider' => $provider,
+            'providerUserId' => $providerUserId,
             'applicants' => $this->applicationRepo->findByScholarship($id),
         ]);
     }
@@ -255,14 +280,38 @@ class AdminController extends Controller
     {
         $s = $this->scholarshipRepo->findById($id);
         if ($s) {
+            $action = $request->input('action'); // 'approve' or 'reject' for pending scholarships
+
             $newStatus = match ($s['status']) {
+                'pending', 'draft' => $action === 'approve' ? 'open' : ($action === 'reject' ? 'closed' : 'open'),
                 'open' => 'closed',
                 'closed' => 'open',
-                'draft' => 'open',
                 default => 'open',
             };
             $this->scholarshipRepo->update($id, ['status' => $newStatus]);
             AuditLog::log('scholarship_status', 'scholarship', $id, "{$s['name']} → {$newStatus}");
+
+            // Notify the provider
+            $provider = $this->providerRepo->findById($s['provider_id']);
+            $providerUserId = $provider ? ($provider['user_id'] ?? null) : null;
+            if ($providerUserId) {
+                if (in_array($s['status'], ['pending', 'draft']) && $newStatus === 'open') {
+                    $this->notificationRepo->create([
+                        'user_id' => $providerUserId,
+                        'type' => 'scholarship_approved',
+                        'title' => 'Scholarship Approved',
+                        'message' => "Your scholarship \"{$s['name']}\" has been approved and is now open to applicants.",
+                    ]);
+                } elseif (in_array($s['status'], ['pending', 'draft']) && $newStatus === 'closed') {
+                    $this->notificationRepo->create([
+                        'user_id' => $providerUserId,
+                        'type' => 'scholarship_rejected',
+                        'title' => 'Scholarship Not Approved',
+                        'message' => "Your scholarship \"{$s['name']}\" was not approved. Edit and re-submit it for review.",
+                    ]);
+                }
+            }
+
             Session::flash('success', "Scholarship {$s['name']} is now {$newStatus}");
         }
         Response::back();
@@ -319,7 +368,38 @@ class AdminController extends Controller
         $verifiedCount = $this->providerRepo->countVerified();
         $this->view('admin/providers', [
             'title' => 'Provider Management',
+            'page' => 'all',
             'providers' => $providers,
+            'verifiedCount' => $verifiedCount,
+            'unverifiedCount' => $totalProviders - $verifiedCount,
+            'totalProviders' => $totalProviders,
+            'staffCount' => (int) (\App\Core\Database::connect())->query("SELECT COUNT(*) FROM staff")->fetchColumn(),
+        ]);
+    }
+
+    public function providersVerified(): void
+    {
+        $totalProviders = $this->providerRepo->count();
+        $verifiedCount = $this->providerRepo->countVerified();
+        $this->view('admin/providers', [
+            'title' => 'Verified Providers',
+            'page' => 'verified',
+            'providers' => $this->providerRepo->getVerified(),
+            'verifiedCount' => $verifiedCount,
+            'unverifiedCount' => $totalProviders - $verifiedCount,
+            'totalProviders' => $totalProviders,
+            'staffCount' => (int) (\App\Core\Database::connect())->query("SELECT COUNT(*) FROM staff")->fetchColumn(),
+        ]);
+    }
+
+    public function providersUnverified(): void
+    {
+        $totalProviders = $this->providerRepo->count();
+        $verifiedCount = $this->providerRepo->countVerified();
+        $this->view('admin/providers', [
+            'title' => 'Unverified Providers',
+            'page' => 'unverified',
+            'providers' => $this->providerRepo->getUnverified(),
             'verifiedCount' => $verifiedCount,
             'unverifiedCount' => $totalProviders - $verifiedCount,
             'totalProviders' => $totalProviders,
@@ -415,6 +495,71 @@ class AdminController extends Controller
             Session::flash('success', "Application #{$id} set to {$status}");
         }
         Response::back();
+    }
+
+    public function exportApplications(): void
+    {
+        $status = $this->input('status');
+        $scholarshipId = $this->input('scholarship_id');
+        $data = $this->applicationRepo->getExportData($status, null, $scholarshipId ? (int)$scholarshipId : null);
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename=admin_applications_' . date('Y-m-d') . '.csv');
+
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+        fputcsv($output, ['Application No', 'Student Name', 'Email', 'Scholarship', 'Provider', 'Amount', 'CGPA', 'Course', 'University', 'Status', 'Applied Date']);
+
+        foreach ($data as $row) {
+            fputcsv($output, [
+                $row['application_number'] ?? 'APP-' . $row['id'],
+                $row['student_name'],
+                $row['student_email'],
+                $row['scholarship_name'],
+                $row['provider_name'] ?? '',
+                $row['amount'],
+                json_decode($row['cgpa'] ?? 'null', true) ?? '',
+                json_decode($row['course'] ?? 'null', true) ?? '',
+                json_decode($row['university'] ?? 'null', true) ?? '',
+                $row['status'],
+                date('d M Y', strtotime($row['created_at'])),
+            ]);
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    public function emailLogs(): void
+    {
+        $logs = $this->applicationRepo->getEmailLogs();
+        $this->view('admin/email_logs', [
+            'title' => 'Email Logs',
+            'logs' => $logs,
+        ]);
+    }
+
+    public function reports(): void
+    {
+        $totalApps = $this->applicationRepo->count();
+        $approved = $this->applicationRepo->countByStatus('approved');
+        $rejected = $this->applicationRepo->countByStatus('rejected');
+        $pending = $this->applicationRepo->countByStatus('submitted');
+
+        $scholarships = $this->scholarshipRepo->getAll();
+        $totalScholarships = count($scholarships);
+        $activeScholarships = count(array_filter($scholarships, fn($s) => ($s['status'] ?? '') === 'published'));
+
+        $this->view('admin/reports', [
+            'title' => 'Reports',
+            'totalApplications' => $totalApps,
+            'approvedCount' => $approved,
+            'rejectedCount' => $rejected,
+            'pendingCount' => $pending,
+            'approvalRate' => $totalApps > 0 ? round(($approved / $totalApps) * 100, 1) : 0,
+            'totalScholarships' => $totalScholarships,
+            'activeScholarships' => $activeScholarships,
+        ]);
     }
 
     // ─── 6. PAYMENT & SaaS MANAGEMENT ───────────────────────────────────────
@@ -551,6 +696,11 @@ class AdminController extends Controller
 
     public function updateSettings(Request $request): void
     {
+        // Handle checkboxes — unchecked boxes aren't sent in POST
+        foreach (['maintenance_mode', 'allow_student_registration', 'allow_provider_registration'] as $cb) {
+            $this->settingsRepo->set($cb, isset($_POST[$cb]) ? '1' : '0');
+        }
+
         foreach ($_POST as $key => $value) {
             if ($key === '_token') continue;
             $this->settingsRepo->set($key, $value);
@@ -576,19 +726,24 @@ class AdminController extends Controller
 
     public function analytics(): void
     {
+        $startDate = $this->input('start_date');
+        $endDate = $this->input('end_date');
+        $dateFilter = $startDate && $endDate ? $startDate . '|' . $endDate : null;
+
         $this->view('admin/analytics', [
             'title' => 'Analytics',
-            'userGrowth' => $this->userRepo->getUserGrowth(),
-            'registrationTrend' => $this->userRepo->getRegistrationTrend(12),
-            'applicationTrend' => $this->applicationRepo->getApplicationTrend(12),
-            'topScholarships' => $this->applicationRepo->getTopScholarships(10),
-            'revenueTrend' => $this->paymentRepo->getRevenueTrend(),
-            'totalUsers' => $this->userRepo->count(),
-            'totalStudents' => $this->userRepo->countByRole('student'),
-            'totalProviders' => $this->userRepo->countByRole('provider'),
-            'totalAdmins' => $this->userRepo->countByRole('admin'),
-            'totalApplications' => $this->applicationRepo->count(),
-            'totalRevenue' => $this->paymentRepo->totalRevenue(),
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'userGrowth' => $this->userRepo->getUserGrowth(12, $startDate, $endDate),
+            'applicationGrowth' => $this->applicationRepo->getApplicationTrend(12, $startDate, $endDate),
+            'topScholarships' => $this->applicationRepo->getTopScholarships(10, $startDate, $endDate),
+            'revenueTrend' => $this->paymentRepo->getRevenueTrend($startDate, $endDate),
+            'totalUsers' => $this->userRepo->count($startDate, $endDate),
+            'totalStudents' => $this->userRepo->countByRole('student', $startDate, $endDate),
+            'totalProviders' => $this->userRepo->countByRole('provider', $startDate, $endDate),
+            'totalScholarships' => $this->scholarshipRepo->count($startDate, $endDate),
+            'totalApplications' => $this->applicationRepo->count($startDate, $endDate),
+            'totalRevenue' => $this->paymentRepo->totalRevenue($startDate, $endDate),
         ]);
     }
 
@@ -688,11 +843,34 @@ class AdminController extends Controller
         ]);
     }
 
+    public function supportTicketDetail(Request $request, int $id): void
+    {
+        $ticket = $this->ticketRepo->findById($id);
+        if (!$ticket) {
+            $this->notFound();
+        }
+        $this->view('admin/support_ticket_detail', [
+            'title' => 'Ticket #' . $id,
+            'ticket' => $ticket,
+        ]);
+    }
+
     public function ticketReply(Request $request, int $id): void
     {
         $data = $request->validate(['reply' => 'required']);
         $this->ticketRepo->reply($id, $data['reply'], Auth::id());
         AuditLog::log('ticket_replied', 'support_ticket', $id, 'Admin replied to ticket');
+
+        $ticket = $this->ticketRepo->findById($id);
+        if ($ticket) {
+            $this->notificationRepo->create([
+                'user_id' => $ticket['user_id'],
+                'type' => 'ticket_reply',
+                'title' => 'Support Ticket Updated',
+                'message' => "Your ticket '{$ticket['subject']}' has received a reply from our team.",
+            ]);
+        }
+
         Session::flash('success', 'Reply sent');
         Response::back();
     }
@@ -702,6 +880,36 @@ class AdminController extends Controller
         $status = $request->input('status', 'closed');
         $this->ticketRepo->updateStatus($id, $status);
         Session::flash('success', "Ticket status: {$status}");
+        Response::back();
+    }
+
+    public function notifications(): void
+    {
+        $notifications = $this->notificationRepo->findByUser(Auth::id());
+        $this->view('admin/notifications', [
+            'title' => 'Notifications',
+            'notifications' => $notifications,
+        ]);
+    }
+
+    public function markNotificationRead(Request $request, int $id): void
+    {
+        $this->notificationRepo->markAsRead($id, Auth::id());
+        Response::back();
+    }
+
+    public function unreadCount(): void
+    {
+        $count = $this->notificationRepo->countUnread(Auth::id());
+        header('Content-Type: application/json');
+        echo json_encode(['count' => $count]);
+        exit;
+    }
+
+    public function markAllRead(): void
+    {
+        $this->notificationRepo->markAllAsRead(Auth::id());
+        Session::flash('success', 'All notifications marked as read');
         Response::back();
     }
 

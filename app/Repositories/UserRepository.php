@@ -76,15 +76,27 @@ class UserRepository
         return $this->db->query("SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC LIMIT $limit")->fetchAll();
     }
 
-    public function count(): int
+    private function dateWhere(?string $start, ?string $end): string
     {
-        return (int) $this->db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        if ($start && $end) return " AND created_at >= ? AND created_at <= ?";
+        if ($start) return " AND created_at >= ?";
+        if ($end) return " AND created_at <= ?";
+        return '';
     }
 
-    public function countByRole(string $role): int
+    public function count(?string $startDate = null, ?string $endDate = null): int
     {
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE role = ?");
-        $stmt->execute([$role]);
+        $where = $this->dateWhere($startDate, $endDate);
+        $sql = "SELECT COUNT(*) FROM users" . ($where ? " WHERE 1=1$where" : "");
+        if ($where) { $stmt = $this->db->prepare($sql); $stmt->execute(array_filter([$startDate, $endDate])); return (int) $stmt->fetchColumn(); }
+        return (int) $this->db->query($sql)->fetchColumn();
+    }
+
+    public function countByRole(string $role, ?string $startDate = null, ?string $endDate = null): int
+    {
+        $where = $this->dateWhere($startDate, $endDate);
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE role = ?$where");
+        $stmt->execute(array_filter([$role, $startDate, $endDate]));
         return (int) $stmt->fetchColumn();
     }
 
@@ -100,8 +112,13 @@ class UserRepository
         return $this->db->query("SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total FROM users WHERE role = 'student' AND created_at >= DATE_SUB(CURDATE(), INTERVAL $months MONTH) GROUP BY month ORDER BY month")->fetchAll();
     }
 
-    public function getUserGrowth(): array
+    public function getUserGrowth(int $months = 12, ?string $startDate = null, ?string $endDate = null): array
     {
-        return $this->db->query("SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total FROM users WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY month ORDER BY month")->fetchAll();
+        if ($startDate && $endDate) {
+            $stmt = $this->db->prepare("SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total FROM users WHERE created_at >= ? AND created_at <= ? GROUP BY month ORDER BY month");
+            $stmt->execute([$startDate, $endDate]);
+            return $stmt->fetchAll();
+        }
+        return $this->db->query("SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total FROM users WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL $months MONTH) GROUP BY month ORDER BY month")->fetchAll();
     }
 }

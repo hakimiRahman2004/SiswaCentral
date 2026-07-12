@@ -284,10 +284,14 @@ class StudentController extends Controller
             Response::redirect('/applications');
         }
         $logs = $this->applicationRepo->getStatusLogs($id);
+        $interview = $this->applicationRepo->getInterview($id);
+        $essayRequest = $this->applicationRepo->getEssayRequest($id);
         $this->view('student/application-detail', [
             'title' => 'Application Details',
             'app' => $app,
             'logs' => $logs,
+            'interview' => $interview,
+            'essayRequest' => $essayRequest,
         ]);
     }
 
@@ -301,6 +305,40 @@ class StudentController extends Controller
             Session::flash('error', 'Only submitted applications can be cancelled');
         }
         Response::redirect('/applications');
+    }
+
+    public function submitEssay(Request $request, int $id): void
+    {
+        $app = $this->applicationRepo->findById($id);
+        if (!$app || $app['student_id'] !== Auth::id()) Response::redirect('/applications');
+        $essay = trim((string) $request->input('essay'));
+        $requestData = $this->applicationRepo->getEssayRequest($id);
+        if (!$requestData || $essay === '') {
+            Session::flash('error', 'Write your essay before submitting.');
+            Response::back();
+        }
+        if (strlen($essay) > 10000) {
+            Session::flash('error', 'Your essay must be 10,000 characters or fewer.');
+            Response::back();
+        }
+        if (!empty($requestData['submitted_at'])) {
+            Session::flash('error', 'This essay has already been submitted.');
+            Response::back();
+        }
+        if (!empty($requestData['due_at']) && strtotime($requestData['due_at']) < time()) {
+            Session::flash('error', 'The deadline for this essay has passed.');
+            Response::back();
+        }
+        if (!$this->applicationRepo->submitEssay($id, Auth::id(), $essay)) {
+            Session::flash('error', 'Your essay could not be submitted. Please try again.');
+            Response::back();
+        }
+        $provider = $this->providerRepo->findById($app['provider_id']);
+        if ($provider && !empty($provider['user_id'])) {
+            $this->notificationRepo->create(['user_id' => $provider['user_id'], 'type' => 'essay_submission', 'title' => 'Essay submitted', 'message' => $app['student_name'] . ' submitted the requested essay for "' . $app['scholarship_name'] . '".']);
+        }
+        Session::flash('success', 'Essay submitted successfully.');
+        Response::redirect('/applications/' . $id);
     }
 
     public function saveScholarship(Request $request, int $id): void
@@ -502,11 +540,30 @@ class StudentController extends Controller
             'message' => 'required|min:10',
         ]);
 
-        $this->ticketRepo->create([
+        $ticketId = $this->ticketRepo->create([
             'user_id' => Auth::id(),
             'subject' => $data['subject'],
             'message' => $data['message'],
         ]);
+
+        $userName = Auth::user()['name'] ?? 'Student';
+
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'ticket_confirmation',
+            'title' => 'Support Ticket Submitted',
+            'message' => "Your support ticket '{$data['subject']}' has been submitted. We'll get back to you soon.",
+        ]);
+
+        $admins = $this->userRepo->getAllByRole('admin');
+        foreach ($admins as $admin) {
+            $this->notificationRepo->create([
+                'user_id' => $admin['id'],
+                'type' => 'new_ticket',
+                'title' => 'New Support Ticket',
+                'message' => "New ticket from {$userName}: {$data['subject']}",
+            ]);
+        }
 
         Session::flash('success', 'Support ticket submitted. We\'ll get back to you soon.');
         Response::redirect('/support-tickets');
@@ -527,10 +584,29 @@ class StudentController extends Controller
         $repo = new \App\Repositories\FeedbackRepository();
         $repo->create([
             'user_id' => Auth::id(),
-            'subject' => 'Rating: ' . $data['rating'] . '/5',
+            'type' => 'general',
             'message' => $data['message'],
             'rating' => (int) $data['rating'],
         ]);
+
+        $userName = Auth::user()['name'] ?? 'Student';
+
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'feedback_confirmation',
+            'title' => 'Feedback Received',
+            'message' => 'Thank you for your feedback! We appreciate your input.',
+        ]);
+
+        $admins = $this->userRepo->getAllByRole('admin');
+        foreach ($admins as $admin) {
+            $this->notificationRepo->create([
+                'user_id' => $admin['id'],
+                'type' => 'new_feedback',
+                'title' => 'New Feedback Submitted',
+                'message' => "New feedback from {$userName} (Rating: {$data['rating']}/5)",
+            ]);
+        }
 
         Session::flash('success', 'Thank you for your feedback!');
         Response::redirect('/feedback');
@@ -542,6 +618,21 @@ class StudentController extends Controller
         Response::back();
     }
 
+    public function unreadCount(): void
+    {
+        $count = $this->notificationRepo->countUnread(Auth::id());
+        header('Content-Type: application/json');
+        echo json_encode(['count' => $count]);
+        exit;
+    }
+
+    public function markAllRead(): void
+    {
+        $this->notificationRepo->markAllAsRead(Auth::id());
+        Session::flash('success', 'All notifications marked as read');
+        Response::back();
+    }
+
     public function notifications(): void
     {
         $notifications = $this->notificationRepo->findByUser(Auth::id());
@@ -549,5 +640,204 @@ class StudentController extends Controller
             'title' => 'Notifications',
             'notifications' => $notifications,
         ]);
+    }
+
+    // ─── ENHANCED APPLICATION FORM ──────────────────────────────────────
+
+    public function newApplication(Request $request, int $scholarshipId): void
+    {
+        $scholarship = $this->scholarshipRepo->findById($scholarshipId);
+        if (!$scholarship || $scholarship['status'] !== 'open') {
+            Session::flash('error', 'Scholarship not available');
+            Response::redirect('/scholarships');
+        }
+
+        $existing = $this->applicationRepo->findByStudentAndScholarship(Auth::id(), $scholarshipId);
+        if ($existing) {
+            Session::flash('error', 'You have already applied to this scholarship');
+            Response::redirect("/applications/{$existing['id']}");
+        }
+
+        $profile = $this->profileRepo->findByUserId(Auth::id());
+        if (!$profile || !$profile['cgpa'] || !$profile['course']) {
+            Session::flash('error', 'Complete your profile before applying');
+            Response::redirect('/profile');
+        }
+
+        PlanGuard::canApply();
+
+        $user = Auth::user();
+        $documents = $this->documentRepo->findByUser(Auth::id());
+
+        $this->view('student/application-form', [
+            'title' => 'Apply - ' . $scholarship['name'],
+            'scholarship' => $scholarship,
+            'profile' => $profile,
+            'user' => $user,
+            'documents' => $documents,
+        ]);
+    }
+
+    public function submitApplication(Request $request, int $scholarshipId): void
+    {
+        $scholarship = $this->scholarshipRepo->findById($scholarshipId);
+        if (!$scholarship || $scholarship['status'] !== 'open') {
+            Session::flash('error', 'Scholarship not available');
+            Response::redirect('/scholarships');
+        }
+
+        $existing = $this->applicationRepo->findByStudentAndScholarship(Auth::id(), $scholarshipId);
+        if ($existing) {
+            Session::flash('error', 'You have already applied to this scholarship');
+            Response::redirect("/applications/{$existing['id']}");
+        }
+
+        PlanGuard::canApply();
+
+        $data = $request->validate([
+            'achievements' => 'required',
+            'motivation_letter' => 'required|min:50',
+        ]);
+
+        $details = [
+            'cgpa' => $request->input('cgpa'),
+            'course' => $request->input('course'),
+            'university' => $request->input('university'),
+            'income' => $request->input('income'),
+            'achievements' => $data['achievements'],
+            'co_curricular' => $request->input('co_curricular', ''),
+            'motivation_letter' => $data['motivation_letter'],
+            'emergency_name' => $request->input('emergency_name', ''),
+            'emergency_phone' => $request->input('emergency_phone', ''),
+            'emergency_relationship' => $request->input('emergency_relationship', ''),
+            'document_ids' => $request->input('document_ids', []),
+        ];
+
+        $appId = $this->applicationRepo->createFull([
+            'student_id' => Auth::id(),
+            'scholarship_id' => $scholarshipId,
+            'provider_id' => $scholarship['provider_id'],
+            'details' => $details,
+        ]);
+
+        // Attach selected documents
+        $docIds = $request->input('document_ids', []);
+        if (!empty($docIds)) {
+            $db = \App\Core\Database::connect();
+            foreach ($docIds as $docId) {
+                $stmt = $db->prepare("INSERT INTO application_documents (application_id, document_id) VALUES (?, ?)");
+                $stmt->execute([$appId, $docId]);
+            }
+        }
+
+        $app = $this->applicationRepo->findById($appId);
+        $user = Auth::user();
+
+        // Notify student
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'application_submitted',
+            'title' => 'Application Submitted',
+            'message' => "Your application {$app['application_number']} for \"{$scholarship['name']}\" has been submitted.",
+        ]);
+
+        // Notify provider
+        $provider = $this->providerRepo->findById($scholarship['provider_id']);
+        if ($provider && !empty($provider['user_id'])) {
+            $this->notificationRepo->create([
+                'user_id' => $provider['user_id'],
+                'type' => 'new_application',
+                'title' => 'New Application Received',
+                'message' => "{$user['name']} has applied for \"{$scholarship['name']}\" ({$app['application_number']}).",
+            ]);
+        }
+
+        // Send email
+        $emailService = new \App\Services\EmailService();
+        $emailService->applicationSubmitted($user, $scholarship, $app['application_number']);
+
+        $this->applicationRepo->logStatusChange($appId, null, 'submitted', Auth::id());
+
+        Session::flash('success', 'Application submitted successfully!');
+        Response::redirect('/applications');
+    }
+
+    public function saveDraft(Request $request, int $id): void
+    {
+        $app = $this->applicationRepo->findById($id);
+        if (!$app || $app['student_id'] != Auth::id()) {
+            Response::redirect('/applications');
+        }
+
+        if (!in_array($app['status'], ['pending', 'submitted'])) {
+            Session::flash('error', 'Cannot edit this application');
+            Response::back();
+        }
+
+        $details = $this->applicationRepo->getDetails($id) ?? [];
+        $newDetails = array_merge($details, [
+            'cgpa' => $request->input('cgpa') ?? $details['cgpa'] ?? '',
+            'course' => $request->input('course') ?? $details['course'] ?? '',
+            'university' => $request->input('university') ?? $details['university'] ?? '',
+            'income' => $request->input('income') ?? $details['income'] ?? '',
+            'achievements' => $request->input('achievements') ?? $details['achievements'] ?? '',
+            'co_curricular' => $request->input('co_curricular') ?? $details['co_curricular'] ?? '',
+            'motivation_letter' => $request->input('motivation_letter') ?? $details['motivation_letter'] ?? '',
+            'emergency_name' => $request->input('emergency_name') ?? $details['emergency_name'] ?? '',
+            'emergency_phone' => $request->input('emergency_phone') ?? $details['emergency_phone'] ?? '',
+            'emergency_relationship' => $request->input('emergency_relationship') ?? $details['emergency_relationship'] ?? '',
+        ]);
+
+        $this->applicationRepo->saveDraft([
+            'id' => $id,
+            'student_id' => Auth::id(),
+            'scholarship_id' => $app['scholarship_id'],
+            'provider_id' => $app['provider_id'],
+            'application_number' => $app['application_number'],
+            'details' => $newDetails,
+        ]);
+
+        Session::flash('success', 'Draft saved successfully');
+        Response::back();
+    }
+
+    public function withdrawApplication(Request $request, int $id): void
+    {
+        $app = $this->applicationRepo->findById($id);
+        if (!$app || $app['student_id'] != Auth::id()) {
+            Response::redirect('/applications');
+        }
+
+        if (!in_array($app['status'], ['pending', 'submitted', 'screening'])) {
+            Session::flash('error', 'Cannot withdraw this application');
+            Response::back();
+        }
+
+        $this->applicationRepo->withdraw($id, Auth::id());
+        $this->applicationRepo->logStatusChange($id, $app['status'], 'withdrawn', Auth::id(), 'Withdrawn by student');
+
+        $scholarship = $this->scholarshipRepo->findById($app['scholarship_id']);
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'application_withdrawn',
+            'title' => 'Application Withdrawn',
+            'message' => "Your application {$app['application_number']} has been withdrawn.",
+        ]);
+
+        // Notify provider
+        if ($scholarship) {
+            $provider = $this->providerRepo->findById($scholarship['provider_id']);
+            if ($provider && !empty($provider['user_id'])) {
+                $this->notificationRepo->create([
+                    'user_id' => $provider['user_id'],
+                    'type' => 'application_withdrawn',
+                    'title' => 'Application Withdrawn',
+                    'message' => "Application {$app['application_number']} for \"{$scholarship['name']}\" has been withdrawn by the student.",
+                ]);
+            }
+        }
+
+        Session::flash('success', 'Application withdrawn');
+        Response::redirect('/applications');
     }
 }

@@ -48,6 +48,13 @@ $title = 'Admin Dashboard';
             <div class="stat-label">Total Revenue</div>
             <div class="stat-decoration" style="background: var(--color-warning-500);"></div>
         </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="background: var(--color-danger-50); color: var(--color-danger-600);">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"/></svg>
+            </div>
+            <div class="stat-value"><?= e($openTickets ?? 0) ?></div>
+            <div class="stat-label">Open Tickets</div>
+        </div>
     </div>
 
     <!-- Recent Activity Grid -->
@@ -93,6 +100,69 @@ $title = 'Admin Dashboard';
                         <span class="text-surface-300 mx-1">·</span>
                         <span class="text-surface-400"><?= isset($a['created_at']) ? date('d M Y', strtotime($a['created_at'])) : '-' ?></span>
                     </p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Support & Feedback -->
+    <div class="grid gap-6 lg:grid-cols-2 mb-8">
+        <div class="card p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="section-title mb-0">Recent Support Tickets</h2>
+                <a href="<?= url('/admin/support-tickets') ?>" class="btn btn-ghost btn-sm">View all</a>
+            </div>
+            <div class="divide-y divide-surface-100">
+                <?php if (empty($recentTickets)): ?>
+                    <p class="text-sm text-surface-400 py-4 text-center">No open tickets.</p>
+                <?php endif; ?>
+                <?php foreach (array_slice($recentTickets ?? [], 0, 5) as $t): ?>
+                <div class="py-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <a href="<?= url('/admin/support-tickets/' . e($t['id'])) ?>" class="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline truncate">
+                            <?= e($t['subject'] ?? '') ?>
+                        </a>
+                        <span class="shrink-0 inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full <?= ($t['status'] ?? '') === 'open' ? 'bg-red-50 text-red-700' : (($t['status'] ?? '') === 'in_progress' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700') ?>">
+                            <?= e(str_replace('_', ' ', $t['status'] ?? 'open')) ?>
+                        </span>
+                    </div>
+                    <p class="text-xs text-surface-500 mt-0.5">
+                        <?= e($t['user_name'] ?? '') ?>
+                        <span class="text-surface-300 mx-1">·</span>
+                        <?= isset($t['created_at']) ? date('d M Y', strtotime($t['created_at'])) : '-' ?>
+                    </p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="card p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="section-title mb-0">Recent Feedback</h2>
+                <a href="<?= url('/admin/feedback') ?>" class="btn btn-ghost btn-sm">View all</a>
+            </div>
+            <div class="divide-y divide-surface-100">
+                <?php if (empty($recentFeedback)): ?>
+                    <p class="text-sm text-surface-400 py-4 text-center">No feedback yet.</p>
+                <?php endif; ?>
+                <?php foreach (array_slice($recentFeedback ?? [], 0, 5) as $f): ?>
+                <div class="py-2.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-surface-800 truncate"><?= e($f['user_name'] ?? '') ?></p>
+                            <div class="flex items-center gap-1 mt-0.5">
+                                <?php $r = (int)($f['rating'] ?? 0); for ($i = 1; $i <= 5; $i++): ?>
+                                <svg class="w-3 h-3 <?= $i <= $r ? 'text-yellow-400' : 'text-surface-200' ?>" fill="currentColor" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5z"/></svg>
+                                <?php endfor; ?>
+                            </div>
+                            <p class="text-xs text-surface-500 mt-0.5 truncate"><?= e($f['message'] ?? '') ?></p>
+                        </div>
+                        <span class="shrink-0 inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full <?= ($f['status'] ?? '') === 'pending' ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700' ?>">
+                            <?= e($f['status'] ?? 'pending') ?>
+                        </span>
+                    </div>
+                    <p class="text-xs text-surface-400 mt-1"><?= isset($f['created_at']) ? date('d M Y', strtotime($f['created_at'])) : '-' ?></p>
                 </div>
                 <?php endforeach; ?>
             </div>

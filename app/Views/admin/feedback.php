@@ -6,8 +6,8 @@
         <div class="stat-card"><div class="stat-value"><?= e($pendingCount??0) ?></div><div class="stat-label">Pending</div></div>
         <div class="stat-card"><div class="stat-value"><?= e($reviewedCount??0) ?></div><div class="stat-label">Reviewed</div></div>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>User</th><th>Rating</th><th>Comment</th><th>Status</th><th>Date</th></tr></thead>
-    <tbody><?php if (empty($feedback)): ?><tr><td colspan="5" class="text-center text-surface-400 py-8">No feedback yet.</td></tr><?php endif; ?>
+    <div class="table-wrap"><table><thead><tr><th>User</th><th>Rating</th><th>Comment</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+    <tbody><?php if (empty($feedback)): ?><tr><td colspan="6" class="text-center text-surface-400 py-8">No feedback yet.</td></tr><?php endif; ?>
     <?php foreach ($feedback as $f): ?><tr>
         <td class="font-medium text-sm"><?= e($f['user_name']??'') ?></td>
         <td class="whitespace-nowrap">
@@ -18,5 +18,6 @@
         <td class="text-sm text-surface-600 max-w-xs truncate"><?= e($f['message']??'') ?></td>
         <td><span class="badge <?= ($f['status']??'')==='pending'?'badge-yellow':(($f['status']??'')==='reviewed'?'badge-green':'badge-surface') ?>"><?= e($f['status']??'pending') ?></span></td>
         <td class="text-xs text-surface-500"><?= isset($f['created_at'])?date('d M Y',strtotime($f['created_at'])):'-' ?></td>
+        <td class="text-xs"><?php if (($f['status']??'') !== 'reviewed' && ($f['status']??'') !== 'resolved'): ?><form method="POST" action="<?= url('/admin/feedback/' . $f['id'] . '/status') ?>" class="inline"><?= csrfField() ?><input type="hidden" name="status" value="reviewed"><button type="submit" class="btn btn-ghost btn-xs">Review</button></form><?php else: ?><span class="text-surface-300">--</span><?php endif; ?></td>
     </tr><?php endforeach; ?></tbody></table></div>
 </div>

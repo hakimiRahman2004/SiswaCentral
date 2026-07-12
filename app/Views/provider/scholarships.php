@@ -33,21 +33,23 @@ $title = 'My Scholarships';
                     </td>
                     <td class="font-medium text-surface-700"><?= $s['amount'] ? 'RM'.e(number_format($s['amount'])) : '-' ?></td>
                     <td>
-                        <span class="badge <?= match($s['status'] ?? '') {'open'=>'badge-success','draft'=>'badge-warning','closed'=>'badge-surface', default=>'badge-surface'} ?>">
-                            <?= e(ucfirst($s['status'] ?? '')) ?>
+                        <span class="badge <?= match($s['status'] ?? '') {'open'=>'badge-success','pending'=>'badge-warning','draft'=>'badge-surface','closed'=>'badge-surface', default=>'badge-surface'} ?>">
+                            <?= e(ucfirst(str_replace('_', ' ', $s['status'] ?? ''))) ?>
                         </span>
                     </td>
                     <td class="text-xs text-surface-500"><?= date('d M Y', strtotime($s['deadline'])) ?></td>
                     <td class="font-medium"><?= e($s['applicant_count'] ?? 0) ?></td>
                     <td>
                         <div class="flex gap-1">
-                            <form method="POST" action="<?= url('/provider/scholarships/' . e($s['id']) . '//toggle') ?>" style="display:inline">
+                            <form method="POST" action="<?= url('/provider/scholarships/' . e($s['id']) . '/toggle') ?>" style="display:inline">
                                 <?= csrfField() ?>
+                                <?php if (($s['status'] ?? '') !== 'pending'): ?>
                                 <button type="submit" class="btn btn-ghost btn-sm"><?= ($s['status'] ?? '') === 'open' ? 'Close' : 'Open' ?></button>
+                                <?php endif; ?>
                             </form>
-                            <a href="<?= url('/provider/scholarships/' . e($s['id']) . '//edit') ?>" class="btn btn-ghost btn-sm">Edit</a>
-                            <a href="<?= url('/provider/scholarships/' . e($s['id']) . '//applicants') ?>" class="btn btn-ghost btn-sm">Applicants</a>
-                            <form method="POST" action="<?= url('/provider/scholarships/' . e($s['id']) . '//delete') ?>" style="display:inline" onsubmit="return confirm('Delete this scholarship?')">
+                            <a href="<?= url('/provider/scholarships/' . e($s['id']) . '/edit') ?>" class="btn btn-ghost btn-sm">Edit</a>
+                            <a href="<?= url('/provider/scholarships/' . e($s['id']) . '/applicants') ?>" class="btn btn-ghost btn-sm">Applicants</a>
+                            <form method="POST" action="<?= url('/provider/scholarships/' . e($s['id']) . '/delete') ?>" style="display:inline" onsubmit="return confirm('Delete this scholarship?')">
                                 <?= csrfField() ?>
                                 <button type="submit" class="btn btn-ghost btn-sm" style="color: var(--color-danger-500);">Delete</button>
                             </form>

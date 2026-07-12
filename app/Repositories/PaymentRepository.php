@@ -54,13 +54,23 @@ class PaymentRepository
         return $stmt->fetchAll();
     }
 
-    public function totalRevenue(): float
+    public function totalRevenue(?string $startDate = null, ?string $endDate = null): float
     {
+        if ($startDate && $endDate) {
+            $stmt = $this->db->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'success' AND paid_at >= ? AND paid_at <= ?");
+            $stmt->execute([$startDate, $endDate]);
+            return (float) $stmt->fetchColumn();
+        }
         return (float) $this->db->query("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'success'")->fetchColumn();
     }
 
-    public function getRevenueTrend(): array
+    public function getRevenueTrend(?string $startDate = null, ?string $endDate = null): array
     {
+        if ($startDate && $endDate) {
+            $stmt = $this->db->prepare("SELECT DATE_FORMAT(paid_at, '%Y-%m') as month, COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'success' AND paid_at >= ? AND paid_at <= ? GROUP BY month ORDER BY month");
+            $stmt->execute([$startDate, $endDate]);
+            return $stmt->fetchAll();
+        }
         return $this->db->query("SELECT DATE_FORMAT(paid_at, '%Y-%m') as month, COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'success' AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY month ORDER BY month")->fetchAll();
     }
 

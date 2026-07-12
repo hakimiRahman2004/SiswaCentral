@@ -6,6 +6,12 @@ $title = 'Notifications';
     <div class="page-header">
         <h1 class="page-title">Notifications</h1>
         <p class="page-desc">Stay updated on your scholarship activity</p>
+        <?php if (!empty($notifications) && in_array(false, array_column($notifications, 'is_read'))): ?>
+        <form method="POST" action="<?= url('/provider/notifications/mark-all-read') ?>" class="mt-2">
+            <?= csrfField() ?>
+            <button type="submit" class="btn btn-ghost btn-sm text-xs">Mark all as read</button>
+        </form>
+        <?php endif; ?>
     </div>
 
     <?php if (!empty($notifications)): ?>
@@ -27,7 +33,7 @@ $title = 'Notifications';
                         <p class="text-xs text-surface-400 mt-1"><?= date('d M Y, h:i A', strtotime($n['created_at'])) ?></p>
                     </div>
                     <?php if (!$n['is_read']): ?>
-                    <form method="POST" action="<?= url('/provider/notifications/' . e($n['id']) . '//read') ?>" class="shrink-0">
+                    <form method="POST" action="<?= url('/provider/notifications/' . e($n['id']) . '/read') ?>" class="shrink-0">
                         <?= csrfField() ?>
                         <button type="submit" class="btn btn-ghost btn-sm text-xs">Mark read</button>
                     </form>

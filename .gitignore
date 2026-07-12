@@ -2,5 +2,9 @@ vendor/
 node_modules/
 .env
 public/css/output.css
+public/uploads/
 .DS_Store
 *.log
+AGENTS.md
+SIMPLE_EXPLANATION.md
+.claude/

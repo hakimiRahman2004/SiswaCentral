@@ -14,7 +14,9 @@ use App\Repositories\ApplicationRepository;
 use App\Repositories\StaffRepository;
 use App\Repositories\UserRepository;
 use App\Repositories\NotificationRepository;
+use App\Services\NotificationService;
 use App\Repositories\SubscriptionRepository;
+use App\Repositories\SupportTicketRepository;
 
 class ProviderController extends Controller
 {
@@ -25,6 +27,7 @@ class ProviderController extends Controller
     private UserRepository $userRepo;
     private NotificationRepository $notificationRepo;
     private SubscriptionRepository $subRepo;
+    private SupportTicketRepository $ticketRepo;
 
     public function __construct()
     {
@@ -36,6 +39,7 @@ class ProviderController extends Controller
         $this->userRepo = new UserRepository();
         $this->notificationRepo = new NotificationRepository();
         $this->subRepo = new SubscriptionRepository();
+        $this->ticketRepo = new SupportTicketRepository();
     }
 
     private function getProvider(): array
@@ -71,6 +75,7 @@ class ProviderController extends Controller
         $unreadNotifications = $this->notificationRepo->countUnread(Auth::id());
         $scholarshipStatuses = [
             'open' => $this->scholarshipRepo->countByProviderAndStatus($provider['id'], 'open'),
+            'pending' => $this->scholarshipRepo->countByProviderAndStatus($provider['id'], 'pending'),
             'draft' => $this->scholarshipRepo->countByProviderAndStatus($provider['id'], 'draft'),
             'closed' => $this->scholarshipRepo->countByProviderAndStatus($provider['id'], 'closed'),
         ];
@@ -143,6 +148,71 @@ class ProviderController extends Controller
         ]);
     }
 
+    // ─── ONBOARDING (pre-verification) ────────────────────────────────────
+
+    public function onboarding(): void
+    {
+        $provider = $this->getProvider();
+
+        // If provider is already active (verified), redirect to dashboard
+        if ($provider['status'] === 'active') {
+            Response::redirect('/provider/dashboard');
+            return;
+        }
+
+        $this->view('provider/onboarding', [
+            'title' => 'Complete Your Profile',
+            'provider' => $provider,
+        ]);
+    }
+
+    public function saveOnboarding(Request $request): void
+    {
+        $data = $request->validate([
+            'company_name' => 'required|min:2',
+            'registration_no' => 'required',
+            'phone' => 'required',
+            'address' => 'required',
+        ]);
+
+        $provider = $this->getProvider();
+
+        // Handle document upload
+        $documentPath = $provider['document'] ?? null;
+        if (isset($_FILES['document']) && $_FILES['document']['error'] === UPLOAD_ERR_OK) {
+            $ext = strtolower(pathinfo($_FILES['document']['name'], PATHINFO_EXTENSION));
+            if (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'])) {
+                $dir = 'public/uploads/documents';
+                if (!is_dir($dir)) mkdir($dir, 0755, true);
+                $filename = 'provider_doc_' . bin2hex(random_bytes(8)) . '.' . $ext;
+                move_uploaded_file($_FILES['document']['tmp_name'], "$dir/$filename");
+                $documentPath = "uploads/documents/$filename";
+            }
+        }
+
+        $this->providerRepo->update($provider['id'], [
+            'company_name' => $data['company_name'],
+            'registration_no' => $data['registration_no'],
+            'phone' => $data['phone'],
+            'address' => $data['address'],
+            'document' => $documentPath,
+        ]);
+
+        // Notify admins
+        $admins = $this->userRepo->getAllByRole('admin');
+        foreach ($admins as $admin) {
+            $this->notificationRepo->create([
+                'user_id' => $admin['id'],
+                'type' => 'provider_onboarding',
+                'title' => 'Provider Awaiting Verification',
+                'message' => "{$data['company_name']} has completed onboarding and is ready for review.",
+            ]);
+        }
+
+        Session::flash('success', 'Your profile has been submitted for verification. You will be notified once approved.');
+        Response::redirect('/provider/dashboard');
+    }
+
     public function scholarships(): void
     {
         $provider = $this->getProvider();
@@ -182,7 +252,7 @@ class ProviderController extends Controller
         ]);
 
         $provider = $this->getProvider();
-        $this->scholarshipRepo->create([
+        $scholarshipId = $this->scholarshipRepo->create([
             'provider_id' => $provider['id'],
             'name' => $data['name'],
             'description' => $data['description'],
@@ -192,10 +262,24 @@ class ProviderController extends Controller
             'eligible_courses' => $request->input('eligible_courses'),
             'requirements' => $request->input('requirements'),
             'deadline' => $data['deadline'],
-            'status' => 'draft',
+            'status' => 'pending',
         ]);
 
-        Session::flash('success', 'Scholarship created');
+        // Handle document uploads
+        $this->handleDocumentUploads($request, $scholarshipId);
+
+        // Notify the provider that the scholarship was submitted
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'scholarship_submitted',
+            'title' => 'Scholarship Submitted for Review',
+            'message' => "Your scholarship \"{$data['name']}\" has been submitted for admin review. You'll be notified once it's approved.",
+        ]);
+
+        // Notify all admins
+        $this->notifyAdminsNewScholarship($data['name'], $provider['company_name'] ?? 'A provider');
+
+        Session::flash('success', 'Scholarship submitted for admin review. You will be notified once approved.');
         Response::redirect('/provider/scholarships');
     }
 
@@ -206,10 +290,12 @@ class ProviderController extends Controller
         if (!$scholarship || $scholarship['provider_id'] != $provider['id']) {
             Response::redirect('/provider/scholarships');
         }
+        $documents = $this->scholarshipRepo->getDocuments($id);
         $usage = ProviderGuard::usage();
         $this->view('provider/scholarship-form', [
             'title' => 'Edit Scholarship',
             'scholarship' => $scholarship,
+            'documents' => $documents,
             'usage' => $usage,
         ]);
     }
@@ -233,7 +319,17 @@ class ProviderController extends Controller
             'deadline' => $request->input('deadline'),
         ]);
 
-        Session::flash('success', 'Scholarship updated');
+        // Handle document uploads
+        $this->handleDocumentUploads($request, $id);
+
+        // If scholarship was rejected (closed), re-submit for review
+        if (in_array($scholarship['status'], ['draft', 'closed'])) {
+            $this->scholarshipRepo->update($id, ['status' => 'pending']);
+            $this->notifyAdminsNewScholarship($scholarship['name'], $provider['company_name'] ?? 'A provider');
+            Session::flash('success', 'Scholarship submitted for admin review.');
+        } else {
+            Session::flash('success', 'Scholarship updated');
+        }
         Response::redirect('/provider/scholarships');
     }
 
@@ -253,6 +349,11 @@ class ProviderController extends Controller
         $provider = $this->getProvider();
         $scholarship = $this->scholarshipRepo->findById($id);
         if ($scholarship && $scholarship['provider_id'] == $provider['id']) {
+            // Don't toggle pending scholarships — they need admin approval first
+            if ($scholarship['status'] === 'pending') {
+                Session::flash('error', 'This scholarship is pending admin review and cannot be toggled.');
+                Response::back();
+            }
             $newStatus = $scholarship['status'] === 'open' ? 'closed' : 'open';
             $this->scholarshipRepo->update($id, ['status' => $newStatus]);
         }
@@ -283,6 +384,8 @@ class ProviderController extends Controller
             Response::redirect('/provider/applications');
         }
         $logs = $this->applicationRepo->getStatusLogs($id);
+        $interview = $this->applicationRepo->getInterview($id);
+        $essayRequest = $this->applicationRepo->getEssayRequest($id);
         $scholarship = $this->scholarshipRepo->findById($app['scholarship_id']);
 
         // Get documents attached to this application
@@ -301,6 +404,12 @@ class ProviderController extends Controller
         $vaultStmt->execute([$app['student_id']]);
         $studentDocs = $vaultStmt->fetchAll();
 
+        // Internal notes
+        $notes = $this->applicationRepo->getNotes($id);
+
+        // Document requests
+        $docRequests = $this->applicationRepo->getDocumentRequests($id);
+
         $this->view('provider/application-detail', [
             'title' => 'Application Detail',
             'app' => $app,
@@ -308,6 +417,10 @@ class ProviderController extends Controller
             'logs' => $logs,
             'documents' => $attachedDocs,
             'studentDocs' => $studentDocs,
+            'interview' => $interview,
+            'essayRequest' => $essayRequest,
+            'notes' => $notes,
+            'docRequests' => $docRequests,
         ]);
     }
 
@@ -319,23 +432,131 @@ class ProviderController extends Controller
             Response::redirect('/provider/applications');
         }
 
-        $status = $request->input('status');
-        $notes = $request->input('notes');
+        $status = (string) $request->input('status');
+        $notes = trim((string) $request->input('notes'));
+        $communicationUrl = trim((string) $request->input('communication_url'));
+        $rejectionReason = trim((string) $request->input('rejection_reason'));
+        $allowedStatuses = ['screening', 'shortlisted', 'interview', 'document_required', 'approved', 'rejected'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            Session::flash('error', 'Choose a valid application status.');
+            Response::back();
+        }
+        if ($communicationUrl && !filter_var($communicationUrl, FILTER_VALIDATE_URL)) {
+            Session::flash('error', 'Enter a valid URL.');
+            Response::back();
+        }
         $oldStatus = $app['status'];
 
-        $this->applicationRepo->updateStatus($id, $status, $notes);
-        $this->applicationRepo->logStatusChange($id, $oldStatus, $status, Auth::id(), $notes);
+        $updateData = ['status' => $status];
+        if ($notes) $updateData['notes'] = $notes;
+        if ($communicationUrl) $updateData['communication_url'] = $communicationUrl;
+        if ($rejectionReason && $status === 'rejected') $updateData['rejection_reason'] = $rejectionReason;
+        if ($status === 'approved') $updateData['awarded_at'] = date('Y-m-d H:i:s');
 
-        // Notify the student
-        $this->notificationRepo->create([
-            'user_id' => $app['student_id'],
-            'type' => 'application_status',
-            'title' => 'Application ' . ucfirst($status),
-            'message' => "Your application for \"{$app['scholarship_name']}\" has been updated to: " . ucfirst($status),
-        ]);
+        $this->applicationRepo->update($id, $updateData);
+        $this->applicationRepo->logStatusChange($id, $oldStatus, $status, Auth::id(), $notes ?: $rejectionReason);
 
-        Session::flash('success', 'Application status updated');
+        // Use NotificationService for combined in-app + email
+        $notifService = new NotificationService();
+        $student = (new \App\Repositories\UserRepository())->findById($app['student_id']);
+        $scholarship = $this->scholarshipRepo->findById($app['scholarship_id']);
+
+        if ($student && $scholarship) {
+            $notifService->applicationStatusChanged($app, $student, $scholarship, $oldStatus, $status, $notes, $rejectionReason);
+        }
+
+        Session::flash('success', 'Application status updated to ' . ucfirst(str_replace('_', ' ', $status)));
         Response::back();
+    }
+
+    public function scheduleInterview(Request $request, int $id): void
+    {
+        $app = $this->providerApplicationOrRedirect($id);
+        $scheduledAt = (string) $request->input('scheduled_at');
+        $meetingUrl = trim((string) $request->input('meeting_url'));
+        $instructions = trim((string) $request->input('instructions'));
+        $date = \DateTime::createFromFormat('Y-m-d\\TH:i', $scheduledAt);
+        $dateErrors = \DateTime::getLastErrors();
+        $validDate = $date && (!$dateErrors || ($dateErrors['warning_count'] === 0 && $dateErrors['error_count'] === 0));
+        if (!$validDate || !$meetingUrl || !filter_var($meetingUrl, FILTER_VALIDATE_URL)) {
+            Session::flash('error', 'Provide the interview date, time, and a valid meeting link.');
+            Response::back();
+        }
+        $this->applicationRepo->saveInterview($id, $date->format('Y-m-d H:i:s'), $meetingUrl, $instructions, Auth::id());
+        $this->applicationRepo->update($id, ['status' => 'interview']);
+        $this->applicationRepo->logStatusChange($id, $app['status'], 'interview', Auth::id(), 'Interview scheduled');
+
+        // Use NotificationService
+        $notifService = new NotificationService();
+        $student = (new \App\Repositories\UserRepository())->findById($app['student_id']);
+        $scholarship = $this->scholarshipRepo->findById($app['scholarship_id']);
+        $interview = $this->applicationRepo->getInterview($id);
+
+        if ($student && $scholarship && $interview) {
+            $notifService->interviewScheduled($app, $student, $scholarship, $interview);
+        }
+
+        Session::flash('success', 'Interview saved and the student has been notified.');
+        Response::back();
+    }
+
+    public function requestEssay(Request $request, int $id): void
+    {
+        $app = $this->providerApplicationOrRedirect($id);
+        $prompt = trim((string) $request->input('prompt'));
+        $dueAt = (string) $request->input('due_at');
+        if ($prompt === '') {
+            Session::flash('error', 'Add the essay question or instructions.');
+            Response::back();
+        }
+        $existingRequest = $this->applicationRepo->getEssayRequest($id);
+        if (!empty($existingRequest['submitted_at'])) {
+            Session::flash('error', 'This essay has already been submitted and cannot be changed.');
+            Response::back();
+        }
+        if ($dueAt && !\DateTime::createFromFormat('Y-m-d\\TH:i', $dueAt)) {
+            Session::flash('error', 'Enter a valid essay due date.');
+            Response::back();
+        }
+        $this->applicationRepo->saveEssayRequest($id, $prompt, $dueAt ? date('Y-m-d H:i:s', strtotime($dueAt)) : null, Auth::id());
+        $message = 'An essay has been requested for "' . $app['scholarship_name'] . '". Open your application to read the prompt and submit your response.';
+        $this->notificationRepo->create(['user_id' => $app['student_id'], 'type' => 'essay_request', 'title' => 'Essay requested', 'message' => $message]);
+        Session::flash('success', 'Essay request sent to the student.');
+        Response::back();
+    }
+
+    private function providerApplicationOrRedirect(int $id): array
+    {
+        $app = $this->applicationRepo->findById($id);
+        $provider = $this->getProvider();
+        if (!$app || $app['provider_id'] != $provider['id']) {
+            Response::redirect('/provider/applications');
+        }
+        return $app;
+    }
+
+    private function moveAndNotify(array $app, string $status, string $message): void
+    {
+        if ($app['status'] !== $status) {
+            $this->applicationRepo->updateStatus($app['id'], $status);
+            $this->applicationRepo->logStatusChange($app['id'], $app['status'], $status, Auth::id());
+        }
+        $this->notificationRepo->create(['user_id' => $app['student_id'], 'type' => 'application_status', 'title' => 'Application ' . ucfirst($status), 'message' => $message]);
+    }
+
+    private function statusMessage(string $scholarshipName, string $status, string $notes, string $communicationUrl): string
+    {
+        $messages = [
+            'shortlisted' => 'Congratulations! You have been shortlisted for',
+            'rejected' => 'Your application was not selected for',
+            'approved' => 'Great news! Your application has been approved for',
+            'interview' => 'You have been invited to interview for',
+            'screening' => 'Your application is now being reviewed for',
+        ];
+        $message = ($messages[$status] ?? 'Your application has been updated for') . ' "' . $scholarshipName . '".';
+        if ($notes !== '') $message .= ' Note: ' . $notes;
+        if ($status === 'approved' && $communicationUrl !== '') $message .= ' Join the provider group here: ' . $communicationUrl;
+        return $message;
     }
 
     public function allApplications(): void
@@ -440,31 +661,63 @@ class ProviderController extends Controller
         Response::back();
     }
 
+    public function unreadCount(): void
+    {
+        $count = $this->notificationRepo->countUnread(Auth::id());
+        header('Content-Type: application/json');
+        echo json_encode(['count' => $count]);
+        exit;
+    }
+
+    public function markAllRead(): void
+    {
+        $this->notificationRepo->markAllAsRead(Auth::id());
+        Session::flash('success', 'All notifications marked as read');
+        Response::back();
+    }
+
     // ─── SUPPORT TICKETS ─────────────────────────────────────────────────
 
     public function supportTickets(): void
     {
-        $tickets = \App\Core\Database::connect()->prepare(
-            "SELECT * FROM support_tickets WHERE user_id = ? ORDER BY created_at DESC"
-        );
-        $tickets->execute([Auth::id()]);
+        $tickets = $this->ticketRepo->findByUser(Auth::id());
         $this->view('provider/support-tickets', [
             'title' => 'Support Tickets',
-            'tickets' => $tickets->fetchAll(),
+            'tickets' => $tickets,
         ]);
     }
 
     public function createTicket(Request $request): void
     {
         $data = $request->validate([
-            'subject' => 'required',
-            'message' => 'required',
+            'subject' => 'required|min:3',
+            'message' => 'required|min:10',
         ]);
 
-        $stmt = \App\Core\Database::connect()->prepare(
-            "INSERT INTO support_tickets (user_id, subject, message) VALUES (?, ?, ?)"
-        );
-        $stmt->execute([Auth::id(), $data['subject'], $data['message']]);
+        $ticketId = $this->ticketRepo->create([
+            'user_id' => Auth::id(),
+            'subject' => $data['subject'],
+            'message' => $data['message'],
+        ]);
+
+        $userName = Auth::user()['name'] ?? 'Provider';
+
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'ticket_confirmation',
+            'title' => 'Support Ticket Submitted',
+            'message' => "Your support ticket '{$data['subject']}' has been submitted. We'll get back to you soon.",
+        ]);
+
+        $admins = $this->userRepo->getAllByRole('admin');
+        foreach ($admins as $admin) {
+            $this->notificationRepo->create([
+                'user_id' => $admin['id'],
+                'type' => 'new_ticket',
+                'title' => 'New Support Ticket',
+                'message' => "New ticket from {$userName}: {$data['subject']}",
+            ]);
+        }
 
         Session::flash('success', 'Support ticket created');
         Response::redirect('/provider/support-tickets');
@@ -485,10 +738,29 @@ class ProviderController extends Controller
         $repo = new \App\Repositories\FeedbackRepository();
         $repo->create([
             'user_id' => Auth::id(),
-            'subject' => 'Rating: ' . $data['rating'] . '/5',
+            'type' => 'general',
             'message' => $data['message'],
             'rating' => (int) $data['rating'],
         ]);
+
+        $userName = Auth::user()['name'] ?? 'Provider';
+
+        $this->notificationRepo->create([
+            'user_id' => Auth::id(),
+            'type' => 'feedback_confirmation',
+            'title' => 'Feedback Received',
+            'message' => 'Thank you for your feedback! We appreciate your input.',
+        ]);
+
+        $admins = $this->userRepo->getAllByRole('admin');
+        foreach ($admins as $admin) {
+            $this->notificationRepo->create([
+                'user_id' => $admin['id'],
+                'type' => 'new_feedback',
+                'title' => 'New Feedback Submitted',
+                'message' => "New feedback from {$userName} (Rating: {$data['rating']}/5)",
+            ]);
+        }
 
         Session::flash('success', 'Thank you for your feedback!');
         Response::redirect('/provider/feedback');
@@ -534,5 +806,182 @@ class ProviderController extends Controller
 
         Session::flash('success', 'Settings updated');
         Response::redirect('/provider/settings');
+    }
+
+    // ─── SCHOLARSHIP DOCUMENTS ─────────────────────────────────────────────
+
+    public function deleteScholarshipDoc(Request $request, int $id): void
+    {
+        $doc = $this->scholarshipRepo->findDocumentById($id);
+        if (!$doc) { Response::back(); return; }
+
+        $scholarship = $this->scholarshipRepo->findById($doc['scholarship_id']);
+        $provider = $this->getProvider();
+        if (!$scholarship || $scholarship['provider_id'] != $provider['id']) {
+            Response::redirect('/provider/scholarships');
+        }
+
+        $filePath = __DIR__ . '/../../public/uploads/scholarship_docs/' . $doc['stored_name'];
+        if (file_exists($filePath)) unlink($filePath);
+        $this->scholarshipRepo->deleteDocument($id);
+        Session::flash('success', 'Document removed');
+        Response::back();
+    }
+
+    // ─── HELPERS ───────────────────────────────────────────────────────────
+
+    private function handleDocumentUploads(Request $request, int $scholarshipId): void
+    {
+        $files = $request->file('documents');
+        if (!$files || !is_array($files['name']) || empty(array_filter($files['name']))) return;
+
+        $dir = __DIR__ . '/../../public/uploads/scholarship_docs';
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+
+        foreach ($files['name'] as $i => $name) {
+            if ($files['error'][$i] !== UPLOAD_ERR_OK || empty($name)) continue;
+
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            $stored = uniqid('schdoc_') . '.' . $ext;
+            move_uploaded_file($files['tmp_name'][$i], "$dir/$stored");
+
+            $this->scholarshipRepo->addDocument(
+                $scholarshipId,
+                $name,
+                $stored,
+                $files['size'][$i],
+                $files['type'][$i]
+            );
+        }
+    }
+
+    private function notifyAdminsNewScholarship(string $scholarshipName, string $companyName): void
+    {
+        $admins = $this->userRepo->getAllByRole('admin');
+        foreach ($admins as $admin) {
+            $this->notificationRepo->create([
+                'user_id' => $admin['id'],
+                'type' => 'scholarship_review',
+                'title' => 'New Scholarship Pending Review',
+                'message' => "{$companyName} has submitted \"{$scholarshipName}\" for approval.",
+            ]);
+        }
+    }
+
+    // ─── BULK ACTIONS & EXPORT ────────────────────────────────────────────
+
+    public function bulkAction(Request $request): void
+    {
+        $provider = $this->getProvider();
+        $action = $request->input('bulk_action');
+        $ids = $request->input('application_ids', []);
+
+        if (empty($ids) || !is_array($ids)) {
+            Session::flash('error', 'No applications selected');
+            Response::back();
+        }
+
+        // Verify ownership
+        $validIds = [];
+        foreach ($ids as $id) {
+            $app = $this->applicationRepo->findById((int) $id);
+            if ($app && $app['provider_id'] == $provider['id']) {
+                $validIds[] = (int) $id;
+            }
+        }
+
+        if ($action === 'shortlist') {
+            $this->applicationRepo->bulkUpdateStatus($validIds, 'shortlisted', Auth::id(), 'Bulk shortlisted');
+            Session::flash('success', count($validIds) . ' applications shortlisted');
+        } elseif ($action === 'reject') {
+            $this->applicationRepo->bulkUpdateStatus($validIds, 'rejected', Auth::id(), 'Bulk rejected');
+            Session::flash('success', count($validIds) . ' applications rejected');
+        }
+
+        Response::back();
+    }
+
+    public function exportApplications(Request $request): void
+    {
+        $provider = $this->getProvider();
+        $status = $request->get('status');
+        $data = $this->applicationRepo->getExportData($status, $provider['id']);
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename=applications_' . date('Y-m-d') . '.csv');
+
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF)); // UTF-8 BOM
+        fputcsv($output, ['Application No', 'Student Name', 'Email', 'Scholarship', 'Amount', 'CGPA', 'Course', 'University', 'Status', 'Applied Date']);
+
+        foreach ($data as $row) {
+            fputcsv($output, [
+                $row['application_number'] ?? 'APP-' . $row['id'],
+                $row['student_name'],
+                $row['student_email'],
+                $row['scholarship_name'],
+                $row['amount'],
+                json_decode($row['cgpa'] ?? 'null', true) ?? '',
+                json_decode($row['course'] ?? 'null', true) ?? '',
+                json_decode($row['university'] ?? 'null', true) ?? '',
+                $row['status'],
+                date('d M Y', strtotime($row['created_at'])),
+            ]);
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    public function addNote(Request $request, int $id): void
+    {
+        $provider = $this->getProvider();
+        $app = $this->applicationRepo->findById($id);
+        if (!$app || $app['provider_id'] != $provider['id']) {
+            Response::redirect('/provider/applications');
+        }
+
+        $note = trim((string) $request->input('note'));
+        if ($note === '') {
+            Session::flash('error', 'Note cannot be empty');
+            Response::back();
+        }
+
+        $this->applicationRepo->addNote($id, Auth::id(), $note);
+        Session::flash('success', 'Note added');
+        Response::back();
+    }
+
+    public function requestDocuments(Request $request, int $id): void
+    {
+        $provider = $this->getProvider();
+        $app = $this->applicationRepo->findById($id);
+        if (!$app || $app['provider_id'] != $provider['id']) {
+            Response::redirect('/provider/applications');
+        }
+
+        $docType = trim((string) $request->input('document_type'));
+        $description = trim((string) $request->input('description'));
+        $deadline = $request->input('deadline') ?: null;
+
+        if ($docType === '') {
+            Session::flash('error', 'Document type is required');
+            Response::back();
+        }
+
+        $this->applicationRepo->createDocumentRequest($id, $docType, $description, $deadline, Auth::id());
+        $this->applicationRepo->update($id, ['status' => 'document_required']);
+        $this->applicationRepo->logStatusChange($id, $app['status'], 'document_required', Auth::id(), "Document requested: {$docType}");
+
+        // Notify student
+        $notifService = new NotificationService();
+        $student = $this->userRepo->findById($app['student_id']);
+        $scholarship = $this->scholarshipRepo->findById($app['scholarship_id']);
+        if ($student && $scholarship) {
+            $notifService->documentRequested($app, $student, $scholarship, $docType, $deadline);
+        }
+
+        Session::flash('success', 'Document request sent to student');
+        Response::back();
     }
 }

@@ -9,16 +9,14 @@
                 <span class="badge <?= match($ticket['priority']??''){'high'=>'badge-red','medium'=>'badge-brand','low'=>'badge-surface',default=>'badge-surface'} ?>"><?= e(ucfirst($ticket['priority']??'normal')) ?></span>
             </div>
         </div>
-        <p class="text-sm text-surface-700 mb-6"><?= e($ticket['description']??'') ?></p>
-        <form method="POST" action="<?= url('/admin/support-tickets/' . e($ticket['id']) . '//update-status') ?>" class="flex items-center gap-3"><?= csrfField() ?><select name="status" class="input" style="width:auto"><option value="open" <?= ($ticket['status']??'')==='open'?'selected':''?>>Open</option><option value="in_progress" <?= ($ticket['status']??'')==='in_progress'?'selected':''?>>In Progress</option><option value="resolved" <?= ($ticket['status']??'')==='resolved'?'selected':''?>>Resolved</option><option value="closed" <?= ($ticket['status']??'')==='closed'?'selected':''?>>Closed</option></select><button type="submit" class="btn btn-primary btn-sm">Update</button></form>
+        <p class="text-sm text-surface-700 mb-6"><?= e($ticket['message']??'') ?></p>
+        <form method="POST" action="<?= url('/admin/support-tickets/' . e($ticket['id']) . '/status') ?>" class="flex items-center gap-3"><?= csrfField() ?><select name="status" class="input" style="width:auto"><option value="open" <?= ($ticket['status']??'')==='open'?'selected':''?>>Open</option><option value="in_progress" <?= ($ticket['status']??'')==='in_progress'?'selected':''?>>In Progress</option><option value="resolved" <?= ($ticket['status']??'')==='resolved'?'selected':''?>>Resolved</option><option value="closed" <?= ($ticket['status']??'')==='closed'?'selected':''?>>Closed</option></select><button type="submit" class="btn btn-primary btn-sm">Update</button></form>
     </div>
     <div class="card-hover p-6">
-        <h2 class="font-semibold text-surface-800 text-sm mb-4">Replies</h2>
-        <div class="space-y-4 mb-6">
-            <?php foreach ($replies ?? [] as $r): ?>
-            <div class="p-3 bg-surface-50 rounded-xl"><div class="flex justify-between mb-1"><span class="text-sm font-medium text-surface-800"><?= e($r['user_name']??'') ?></span><span class="text-xs text-surface-400"><?= date('d M Y H:i',strtotime($r['created_at'])) ?></span></div><p class="text-sm text-surface-600"><?= e($r['message']??'') ?></p></div>
-            <?php endforeach; ?>
-        </div>
-        <form method="POST" action="<?= url('/admin/support-tickets/' . e($ticket['id']) . '//reply') ?>"><?= csrfField() ?><textarea name="message" class="input mb-3" rows="3" placeholder="Write a reply..." required></textarea><button type="submit" class="btn btn-primary btn-sm">Send Reply</button></form>
+        <h2 class="font-semibold text-surface-800 text-sm mb-4">Admin Reply</h2>
+        <?php if ($ticket['admin_reply'] ?? ''): ?>
+            <div class="p-3 bg-primary-50 rounded-xl mb-4"><p class="text-sm text-surface-700"><?= e($ticket['admin_reply']) ?></p><p class="text-xs text-surface-400 mt-1"><?= $ticket['replied_at'] ? date('d M Y H:i', strtotime($ticket['replied_at'])) : '' ?></p></div>
+        <?php endif; ?>
+        <form method="POST" action="<?= url('/admin/support-tickets/' . e($ticket['id']) . '/reply') ?>"><?= csrfField() ?><textarea name="reply" class="input mb-3" rows="3" placeholder="Write a reply..." required></textarea><button type="submit" class="btn btn-primary btn-sm">Send Reply</button></form>
     </div>
 </div>

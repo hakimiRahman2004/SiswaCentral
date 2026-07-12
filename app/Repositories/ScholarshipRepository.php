@@ -68,8 +68,13 @@ class ScholarshipRepository
         return (int) $stmt->fetchColumn();
     }
 
-    public function count(): int
+    public function count(?string $startDate = null, ?string $endDate = null): int
     {
+        if ($startDate && $endDate) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM scholarships WHERE created_at >= ? AND created_at <= ?");
+            $stmt->execute([$startDate, $endDate]);
+            return (int) $stmt->fetchColumn();
+        }
         return (int) $this->db->query("SELECT COUNT(*) FROM scholarships")->fetchColumn();
     }
 
@@ -100,6 +105,35 @@ class ScholarshipRepository
     public function countOpen(): int
     {
         return (int) $this->db->query("SELECT COUNT(*) FROM scholarships WHERE status = 'open'")->fetchColumn();
+    }
+
+    // ─── SCHOLARSHIP DOCUMENTS ─────────────────────────────────────────────
+
+    public function getDocuments(int $scholarshipId): array
+    {
+        $stmt = $this->db->prepare("SELECT * FROM scholarship_documents WHERE scholarship_id = ? ORDER BY created_at ASC");
+        $stmt->execute([$scholarshipId]);
+        return $stmt->fetchAll();
+    }
+
+    public function addDocument(int $scholarshipId, string $originalName, string $storedName, int $fileSize, string $mimeType): int
+    {
+        $stmt = $this->db->prepare("INSERT INTO scholarship_documents (scholarship_id, original_name, stored_name, file_size, mime_type) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$scholarshipId, $originalName, $storedName, $fileSize, $mimeType]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function deleteDocument(int $docId): bool
+    {
+        $stmt = $this->db->prepare("DELETE FROM scholarship_documents WHERE id = ?");
+        return $stmt->execute([$docId]);
+    }
+
+    public function findDocumentById(int $docId): ?array
+    {
+        $stmt = $this->db->prepare("SELECT * FROM scholarship_documents WHERE id = ?");
+        $stmt->execute([$docId]);
+        return $stmt->fetch() ?: null;
     }
 
     public function search(?string $q = null, ?string $course = null, ?string $university = null, ?float $cgpa = null, ?float $income = null): array

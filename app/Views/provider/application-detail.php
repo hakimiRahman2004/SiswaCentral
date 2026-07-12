@@ -74,7 +74,7 @@ $docColor = fn($t) => match($t) {
                     <svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Update Status
                 </h2>
-                <form method="POST" action="<?= url('/provider/applications/' . e($app['id']) . '//status') ?>">
+                <form method="POST" action="<?= url('/provider/applications/' . e($app['id']) . '/status') ?>">
                     <?= csrfField() ?>
                     <div class="space-y-3">
                         <div>
@@ -90,6 +90,11 @@ $docColor = fn($t) => match($t) {
                         <div>
                             <label class="input-label">Notes</label>
                             <textarea name="notes" rows="3" class="input w-full resize-none"><?= e($app['notes'] ?? '') ?></textarea>
+                        </div>
+                        <div>
+                            <label for="communication_url" class="input-label">WhatsApp / Telegram group link</label>
+                            <input id="communication_url" name="communication_url" type="url" class="input w-full" value="<?= e($app['communication_url'] ?? '') ?>" placeholder="https://chat.whatsapp.com/...">
+                            <p class="input-hint">Students will see this link on their application page.</p>
                         </div>
                         <button type="submit" class="btn btn-primary w-full justify-center">Update Status</button>
                     </div>
@@ -151,6 +156,40 @@ $docColor = fn($t) => match($t) {
             </div>
         </div>
     </div>
+
+    <!-- Next steps -->
+    <div class="grid gap-6 lg:grid-cols-2 mb-6">
+        <section class="card p-5">
+            <h2 class="text-sm font-semibold text-surface-800 mb-1">Schedule interview</h2>
+            <p class="text-sm text-surface-500 mb-4">Saving this moves the application to Interview and sends the meeting details to the student.</p>
+            <form method="POST" action="<?= url('/provider/applications/' . e($app['id']) . '/interview') ?>" class="space-y-3">
+                <?= csrfField() ?>
+                <div><label for="scheduled_at" class="input-label">Date and time</label><input id="scheduled_at" type="datetime-local" name="scheduled_at" class="input w-full" value="<?= !empty($interview['scheduled_at']) ? e(date('Y-m-d\\TH:i', strtotime($interview['scheduled_at']))) : '' ?>" required></div>
+                <div><label for="meeting_url" class="input-label">Meeting link</label><input id="meeting_url" type="url" name="meeting_url" class="input w-full" value="<?= e($interview['meeting_url'] ?? '') ?>" placeholder="https://meet.google.com/..." required></div>
+                <div><label for="interview_instructions" class="input-label">Instructions <span class="text-surface-400 font-normal">(optional)</span></label><textarea id="interview_instructions" name="instructions" rows="2" class="input w-full resize-none"><?= e($interview['instructions'] ?? '') ?></textarea></div>
+                <button type="submit" class="btn btn-outline w-full justify-center">Save interview & notify</button>
+            </form>
+        </section>
+
+        <section class="card p-5">
+            <h2 class="text-sm font-semibold text-surface-800 mb-1">Request an essay</h2>
+            <p class="text-sm text-surface-500 mb-4">The student can submit their answer directly from their application page.</p>
+            <form method="POST" action="<?= url('/provider/applications/' . e($app['id']) . '/essay-request') ?>" class="space-y-3">
+                <?= csrfField() ?>
+                <div><label for="essay_prompt" class="input-label">Essay question or instructions</label><textarea id="essay_prompt" name="prompt" rows="4" class="input w-full resize-none" required><?= e($essayRequest['prompt'] ?? '') ?></textarea></div>
+                <div><label for="essay_due_at" class="input-label">Due date <span class="text-surface-400 font-normal">(optional)</span></label><input id="essay_due_at" type="datetime-local" name="due_at" class="input w-full" value="<?= !empty($essayRequest['due_at']) ? e(date('Y-m-d\\TH:i', strtotime($essayRequest['due_at']))) : '' ?>"></div>
+                <?php if (!empty($essayRequest['submitted_at'])): ?><p class="text-sm text-success-700">Submitted <?= e(date('d M Y, h:i A', strtotime($essayRequest['submitted_at']))) ?></p><?php endif; ?>
+                <button type="submit" class="btn btn-outline w-full justify-center">Send essay request</button>
+            </form>
+        </section>
+    </div>
+
+    <?php if (!empty($essayRequest['submitted_essay'])): ?>
+    <section class="card p-5 mb-6">
+        <h2 class="text-sm font-semibold text-surface-800 mb-3">Student essay</h2>
+        <div class="p-4 rounded-xl bg-surface-50 text-sm leading-relaxed text-surface-700 whitespace-pre-wrap"><?= e($essayRequest['submitted_essay']) ?></div>
+    </section>
+    <?php endif; ?>
 
     <!-- Student's Document Vault -->
     <div class="card p-5 mb-6">
@@ -222,4 +261,70 @@ $docColor = fn($t) => match($t) {
         </div>
     </div>
     <?php endif; ?>
+
+    <!-- Internal Notes & Document Request -->
+    <div class="grid gap-6 lg:grid-cols-2 mb-6">
+        <!-- Internal Notes -->
+        <div class="card p-5">
+            <h2 class="text-sm font-semibold text-surface-800 mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
+                Internal Notes
+            </h2>
+            <form method="POST" action="<?= url('/provider/applications/' . e($app['id']) . '/notes') ?>" class="mb-4">
+                <?= csrfField() ?>
+                <textarea name="note" rows="3" class="input w-full resize-none" placeholder="Add a note about this application..." required></textarea>
+                <button type="submit" class="btn btn-primary btn-sm mt-2">Add Note</button>
+            </form>
+            <?php if (!empty($notes)): ?>
+            <div class="space-y-3 max-h-64 overflow-y-auto">
+                <?php foreach ($notes as $note): ?>
+                <div class="p-3 rounded-lg bg-surface-50 border border-surface-100">
+                    <p class="text-sm text-surface-700 whitespace-pre-wrap"><?= e($note['note']) ?></p>
+                    <p class="text-xs text-surface-400 mt-1"><?= e($note['author_name'] ?? 'Staff') ?> &middot; <?= date('d M Y, h:i A', strtotime($note['created_at'])) ?></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <p class="text-sm text-surface-400 text-center py-4">No notes yet</p>
+            <?php endif; ?>
+        </div>
+
+        <!-- Document Request -->
+        <div class="card p-5">
+            <h2 class="text-sm font-semibold text-surface-800 mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9.75m-3.75 0H6m3.75 0h3m-3.75 0v3m0-3v-3"/></svg>
+                Request Documents
+            </h2>
+            <form method="POST" action="<?= url('/provider/applications/' . e($app['id']) . '/document-request') ?>" class="space-y-3">
+                <?= csrfField() ?>
+                <div>
+                    <label class="input-label">Document Type</label>
+                    <input type="text" name="document_type" class="input w-full" placeholder="e.g. Bank Statement, Recommendation Letter" required>
+                </div>
+                <div>
+                    <label class="input-label">Description</label>
+                    <textarea name="description" rows="2" class="input w-full resize-none" placeholder="Explain what you need and why..."></textarea>
+                </div>
+                <div>
+                    <label class="input-label">Deadline (optional)</label>
+                    <input type="date" name="deadline" class="input w-full">
+                </div>
+                <button type="submit" class="btn btn-outline w-full justify-center">Request Document</button>
+            </form>
+            <?php if (!empty($docRequests)): ?>
+            <div class="mt-4 space-y-2">
+                <p class="text-xs font-medium text-surface-500 uppercase tracking-wider">Past Requests</p>
+                <?php foreach ($docRequests as $dr): ?>
+                <div class="flex items-center justify-between p-3 rounded-lg bg-surface-50 border border-surface-100">
+                    <div>
+                        <p class="text-sm font-medium text-surface-700"><?= e($dr['document_type']) ?></p>
+                        <p class="text-xs text-surface-400">Requested <?= date('d M Y', strtotime($dr['created_at'])) ?><?= $dr['deadline'] ? ' &middot; Due ' . date('d M Y', strtotime($dr['deadline'])) : '' ?></p>
+                    </div>
+                    <span class="badge <?= ($dr['status'] ?? '') === 'uploaded' ? 'badge-success' : 'badge-warning' ?> text-xs"><?= e(ucfirst($dr['status'] ?? 'pending')) ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>

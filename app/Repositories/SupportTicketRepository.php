@@ -43,6 +43,14 @@ class SupportTicketRepository
         return (int) $this->db->query("SELECT COUNT(*) FROM support_tickets WHERE status != 'closed'")->fetchColumn();
     }
 
+    public function getRecent(int $limit = 5): array
+    {
+        $stmt = $this->db->prepare("SELECT t.*, u.name as user_name, u.email as user_email FROM support_tickets t JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT ?");
+        $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     public function create(array $data): int
     {
         $stmt = $this->db->prepare("INSERT INTO support_tickets (user_id, subject, message) VALUES (?, ?, ?)");

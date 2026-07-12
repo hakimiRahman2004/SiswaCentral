@@ -80,10 +80,21 @@ CREATE TABLE scholarships (
     eligible_courses TEXT,
     requirements TEXT,
     deadline DATE,
-    status ENUM('draft','open','closed') DEFAULT 'draft',
+    status ENUM('draft','pending','open','closed') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS scholarship_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    scholarship_id INT NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    stored_name VARCHAR(255) NOT NULL,
+    file_size INT NOT NULL,
+    mime_type VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (scholarship_id) REFERENCES scholarships(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE applications (
@@ -93,6 +104,7 @@ CREATE TABLE applications (
     provider_id INT NOT NULL,
     status ENUM('submitted','screening','shortlisted','interview','approved','rejected') DEFAULT 'submitted',
     notes TEXT,
+    communication_url VARCHAR(1000) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -106,6 +118,33 @@ CREATE TABLE application_documents (
     document_id INT NOT NULL,
     FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
     FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE application_interviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL UNIQUE,
+    scheduled_at DATETIME NOT NULL,
+    meeting_url VARCHAR(1000) NOT NULL,
+    instructions TEXT,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE application_essay_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    application_id INT NOT NULL UNIQUE,
+    prompt TEXT NOT NULL,
+    due_at DATETIME NULL,
+    submitted_essay TEXT NULL,
+    submitted_at DATETIME NULL,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE subscription_plans (

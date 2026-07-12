@@ -9,13 +9,32 @@ $title = 'My Applications';
     </div>
 
     <?php if (!empty($applications)): ?>
+    <!-- Status Summary -->
+    <?php
+    $counts = [];
+    foreach ($applications as $a) {
+        $st = $a['status'] ?? 'unknown';
+        $counts[$st] = ($counts[$st] ?? 0) + 1;
+    }
+    ?>
+    <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-6">
+        <?php foreach (['submitted','screening','shortlisted','interview','approved'] as $st): ?>
+        <?php if (isset($counts[$st])): ?>
+        <div class="stat-card">
+            <div class="stat-value text-lg" style="color: <?= match($st) {'approved'=>'var(--color-success-600)','screening'=>'var(--color-warning-600)','shortlisted'=>'var(--color-info-600)','interview'=>'var(--color-warning-700)',default=>'var(--color-primary-600)'} ?>"><?= $counts[$st] ?></div>
+            <div class="stat-label"><?= e(ucfirst(str_replace('_', ' ', $st))) ?></div>
+        </div>
+        <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
+                    <th>Application No.</th>
                     <th>Scholarship</th>
                     <th>Provider</th>
-                    <th>Amount</th>
                     <th>Status</th>
                     <th>Applied</th>
                     <th></th>
@@ -24,6 +43,7 @@ $title = 'My Applications';
             <tbody>
                 <?php foreach ($applications as $app): ?>
                 <tr>
+                    <td class="text-xs font-medium text-surface-600"><?= e($app['application_number'] ?? 'APP-' . $app['id']) ?></td>
                     <td>
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0" style="background: var(--color-primary-50); color: var(--color-primary-700);">
@@ -32,11 +52,16 @@ $title = 'My Applications';
                             <span class="font-medium text-surface-800"><?= e($app['scholarship_name'] ?? '') ?></span>
                         </div>
                     </td>
-                    <td class="text-surface-500"><?= e($app['provider_name'] ?? '') ?></td>
-                    <td class="font-medium text-surface-700"><?= $app['amount'] ? 'RM'.e(number_format($app['amount'])) : '-' ?></td>
+                    <td class="text-surface-500"><?= e($app['company_name'] ?? '') ?></td>
                     <td>
                         <?php $s = $app['status'] ?? '';
-                        $sc = match($s) { 'approved' => 'badge-success', 'rejected' => 'badge-danger', 'screening','shortlisted','interview' => 'badge-warning', 'submitted' => 'badge-info', default => 'badge-surface' }; ?>
+                        $sc = match($s) {
+                            'approved' => 'badge-success', 'rejected' => 'badge-danger',
+                            'screening','shortlisted','interview' => 'badge-warning',
+                            'document_required' => 'badge-info', 'submitted' => 'badge-info',
+                            'withdrawn','expired' => 'badge-surface', 'pending' => 'badge-warning',
+                            default => 'badge-surface'
+                        }; ?>
                         <span class="badge <?= $sc ?>"><?= e(ucfirst(str_replace('_', ' ', $s))) ?></span>
                     </td>
                     <td class="text-surface-500 text-xs"><?= date('d M Y', strtotime($app['created_at'])) ?></td>
@@ -45,17 +70,6 @@ $title = 'My Applications';
                 <?php endforeach; ?>
             </tbody>
         </table>
-    </div>
-    <div class="flex flex-wrap gap-3 mt-4">
-        <?php
-        $counts = [];
-        foreach ($applications as $a) {
-            $st = $a['status'] ?? 'unknown';
-            $counts[$st] = ($counts[$st] ?? 0) + 1;
-        }
-        foreach ($counts as $k => $v): ?>
-            <span class="badge badge-surface"><?= e(ucfirst(str_replace('_', ' ', $k)))?>: <strong><?= $v ?></strong></span>
-        <?php endforeach; ?>
     </div>
     <?php else: ?>
     <div class="empty-state">

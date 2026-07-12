@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /c/laragon/www/group_ims566/.claude/ponytail/hooks/ponytail-activate.js",
+            "command": "node /c/phpproject/SiswaCentral/.claude/ponytail/hooks/ponytail-activate.js",
             "timeout": 5,
             "statusMessage": "🐴 Loading ponytail mode..."
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /c/laragon/www/group_ims566/.claude/ponytail/hooks/ponytail-subagent.js",
+            "command": "node /c/phpproject/SiswaCentral/.claude/ponytail/hooks/ponytail-subagent.js",
             "timeout": 5,
             "statusMessage": "🐴 Loading ponytail mode..."
           }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /c/laragon/www/group_ims566/.claude/ponytail/hooks/ponytail-mode-tracker.js",
+            "command": "node /c/phpproject/SiswaCentral/.claude/ponytail/hooks/ponytail-mode-tracker.js",
             "timeout": 5,
             "statusMessage": "🐴 Tracking ponytail mode..."
           }
@@ -69,27 +69,27 @@
     },
     {
       "name": "ponytail",
-      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail/SKILL.md"
+      "path": "C:/phpproject/SiswaCentral/.claude/ponytail/skills/ponytail/SKILL.md"
     },
     {
       "name": "ponytail-review",
-      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-review/SKILL.md"
+      "path": "C:/phpproject/SiswaCentral/.claude/ponytail/skills/ponytail-review/SKILL.md"
     },
     {
       "name": "ponytail-audit",
-      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-audit/SKILL.md"
+      "path": "C:/phpproject/SiswaCentral/.claude/ponytail/skills/ponytail-audit/SKILL.md"
     },
     {
       "name": "ponytail-debt",
-      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-debt/SKILL.md"
+      "path": "C:/phpproject/SiswaCentral/.claude/ponytail/skills/ponytail-debt/SKILL.md"
     },
     {
       "name": "ponytail-gain",
-      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-gain/SKILL.md"
+      "path": "C:/phpproject/SiswaCentral/.claude/ponytail/skills/ponytail-gain/SKILL.md"
     },
     {
       "name": "ponytail-help",
-      "path": "C:/project/group_ims566/.claude/ponytail/skills/ponytail-help/SKILL.md"
+      "path": "C:/phpproject/SiswaCentral/.claude/ponytail/skills/ponytail-help/SKILL.md"
     }
   ],
   "permissions": {

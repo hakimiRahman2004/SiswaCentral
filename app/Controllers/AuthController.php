@@ -7,6 +7,7 @@ use App\Core\Request;
 use App\Core\Session;
 use App\Helpers\AuditLog;
 use App\Services\AuthService;
+use App\Repositories\ProviderRepository;
 
 class AuthController extends Controller
 {
@@ -91,8 +92,22 @@ class AuthController extends Controller
     {
         match ($role) {
             'admin' => $this->redirect('/admin/dashboard'),
-            'provider' => $this->redirect('/provider/dashboard'),
+            'provider' => $this->redirectProvider(),
             default => $this->redirect('/dashboard'),
         };
+    }
+
+    private function redirectProvider(): void
+    {
+        $providerRepo = new ProviderRepository();
+        $provider = $providerRepo->findByUserId(\App\Core\Auth::id());
+
+        // If provider is active (verified), go directly to dashboard
+        if ($provider && $provider['status'] === 'active') {
+            $this->redirect('/provider/dashboard');
+        } else {
+            // New or unverified providers go to onboarding
+            $this->redirect('/provider/onboarding');
+        }
     }
 }

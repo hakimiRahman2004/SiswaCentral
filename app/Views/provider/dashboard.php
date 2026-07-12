@@ -133,14 +133,18 @@ $user = \App\Core\Auth::user();
     <div class="grid gap-6 lg:grid-cols-2 mb-8">
         <div class="card p-5">
             <h2 class="section-title mb-4">Scholarship Status</h2>
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-4 gap-3">
                 <div class="p-4 rounded-xl text-center" style="background: var(--color-success-50);">
                     <p class="text-2xl font-bold font-heading" style="color: var(--color-success-700);"><?= e($scholarshipStatuses['open'] ?? 0) ?></p>
                     <p class="text-xs font-medium mt-1" style="color: var(--color-success-600);">Open</p>
                 </div>
                 <div class="p-4 rounded-xl text-center" style="background: var(--color-warning-50);">
-                    <p class="text-2xl font-bold font-heading" style="color: var(--color-warning-700);"><?= e($scholarshipStatuses['draft'] ?? 0) ?></p>
-                    <p class="text-xs font-medium mt-1" style="color: var(--color-warning-600);">Draft</p>
+                    <p class="text-2xl font-bold font-heading" style="color: var(--color-warning-700);"><?= e($scholarshipStatuses['pending'] ?? 0) ?></p>
+                    <p class="text-xs font-medium mt-1" style="color: var(--color-warning-600);">Pending</p>
+                </div>
+                <div class="p-4 rounded-xl text-center" style="background: var(--color-surface-100);">
+                    <p class="text-2xl font-bold font-heading" style="color: var(--color-surface-700);"><?= e($scholarshipStatuses['draft'] ?? 0) ?></p>
+                    <p class="text-xs font-medium mt-1" style="color: var(--color-surface-600);">Draft</p>
                 </div>
                 <div class="p-4 rounded-xl text-center" style="background: var(--color-surface-100);">
                     <p class="text-2xl font-bold font-heading" style="color: var(--color-surface-700);"><?= e($scholarshipStatuses['closed'] ?? 0) ?></p>

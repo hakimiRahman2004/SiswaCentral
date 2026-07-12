@@ -35,9 +35,16 @@ $router->group(function () use ($router) {
     $router->get('/applications', [StudentController::class, 'applications']);
     $router->get('/applications/{id}', [StudentController::class, 'applicationDetail']);
     $router->post('/applications/{id}/cancel', [StudentController::class, 'cancelApplication']);
+    $router->post('/applications/{id}/essay', [StudentController::class, 'submitEssay']);
+    $router->get('/applications/new/{scholarshipId}', [StudentController::class, 'newApplication']);
+    $router->post('/applications/new/{scholarshipId}', [StudentController::class, 'submitApplication']);
+    $router->post('/applications/{id}/save-draft', [StudentController::class, 'saveDraft']);
+    $router->post('/applications/{id}/withdraw', [StudentController::class, 'withdrawApplication']);
 
     $router->get('/notifications', [StudentController::class, 'notifications']);
+    $router->get('/notifications/unread-count', [StudentController::class, 'unreadCount']);
     $router->post('/notifications/{id}/read', [StudentController::class, 'markNotificationRead']);
+    $router->post('/notifications/mark-all-read', [StudentController::class, 'markAllRead']);
 
     $router->get('/support-tickets', [StudentController::class, 'supportTickets']);
     $router->post('/support-tickets/create', [StudentController::class, 'createTicket']);
@@ -66,6 +73,10 @@ $router->group(function () use ($router) {
     $router->get('/admin/profile', [AdminController::class, 'profile']);
     $router->post('/admin/profile', [AdminController::class, 'updateProfile']);
 
+    // Provider onboarding (accessible before verification)
+    $router->get('/provider/onboarding', [ProviderController::class, 'onboarding']);
+    $router->post('/provider/onboarding', [ProviderController::class, 'saveOnboarding']);
+
     // Provider routes (with verification check)
     $router->group(function () use ($router) {
         $router->middleware(ProviderMiddleware::class);
@@ -81,8 +92,11 @@ $router->group(function () use ($router) {
     $router->post('/provider/scholarships/{id}/edit', [ProviderController::class, 'updateScholarship']);
     $router->post('/provider/scholarships/{id}/delete', [ProviderController::class, 'deleteScholarship']);
     $router->post('/provider/scholarships/{id}/toggle', [ProviderController::class, 'toggleScholarship']);
+    $router->post('/provider/scholarships/doc/{id}/delete', [ProviderController::class, 'deleteScholarshipDoc']);
     $router->get('/provider/scholarships/{id}/applicants', [ProviderController::class, 'applicants']);
     $router->post('/provider/applications/{id}/status', [ProviderController::class, 'updateApplicationStatus']);
+    $router->post('/provider/applications/{id}/interview', [ProviderController::class, 'scheduleInterview']);
+    $router->post('/provider/applications/{id}/essay-request', [ProviderController::class, 'requestEssay']);
     $router->get('/provider/applications', [ProviderController::class, 'allApplications']);
     $router->get('/provider/staff', [ProviderController::class, 'staff']);
     $router->post('/provider/staff/invite', [ProviderController::class, 'inviteStaff']);
@@ -98,7 +112,9 @@ $router->group(function () use ($router) {
 
     // Provider notifications
     $router->get('/provider/notifications', [ProviderController::class, 'notifications']);
+    $router->get('/provider/notifications/unread-count', [ProviderController::class, 'unreadCount']);
     $router->post('/provider/notifications/{id}/read', [ProviderController::class, 'markNotificationRead']);
+    $router->post('/provider/notifications/mark-all-read', [ProviderController::class, 'markAllRead']);
 
     // Provider support tickets
     $router->get('/provider/support-tickets', [ProviderController::class, 'supportTickets']);
@@ -117,6 +133,12 @@ $router->group(function () use ($router) {
 
     // Provider application detail
     $router->get('/provider/applications/{id}', [ProviderController::class, 'applicationDetail']);
+
+    // Provider bulk actions, export, notes, document requests
+    $router->post('/provider/applications/bulk', [ProviderController::class, 'bulkAction']);
+    $router->get('/provider/applications/export', [ProviderController::class, 'exportApplications']);
+    $router->post('/provider/applications/{id}/notes', [ProviderController::class, 'addNote']);
+    $router->post('/provider/applications/{id}/document-request', [ProviderController::class, 'requestDocuments']);
 
     }); // end provider middleware group
 
@@ -146,6 +168,8 @@ $router->group(function () use ($router) {
 
     // Provider Management
     $router->get('/admin/providers', [AdminController::class, 'providers']);
+    $router->get('/admin/providers/verified', [AdminController::class, 'providersVerified']);
+    $router->get('/admin/providers/unverified', [AdminController::class, 'providersUnverified']);
     $router->get('/admin/providers/{id}', [AdminController::class, 'providerDetail']);
     $router->post('/admin/providers/{id}/verify', [AdminController::class, 'providerVerify']);
     $router->post('/admin/providers/{id}/suspend', [AdminController::class, 'providerSuspend']);
@@ -155,6 +179,9 @@ $router->group(function () use ($router) {
     $router->get('/admin/applications', [AdminController::class, 'applications']);
     $router->get('/admin/applications/{id}', [AdminController::class, 'applicationDetail']);
     $router->post('/admin/applications/{id}/force-status', [AdminController::class, 'applicationForceStatus']);
+    $router->get('/admin/applications/export', [AdminController::class, 'exportApplications']);
+    $router->get('/admin/email-logs', [AdminController::class, 'emailLogs']);
+    $router->get('/admin/reports', [AdminController::class, 'reports']);
 
     // Payment & SaaS Management
     $router->get('/admin/subscriptions', [AdminController::class, 'subscriptions']);
@@ -185,10 +212,17 @@ $router->group(function () use ($router) {
 
     // Support / Feedback
     $router->get('/admin/support-tickets', [AdminController::class, 'supportTickets']);
+    $router->get('/admin/support-tickets/{id}', [AdminController::class, 'supportTicketDetail']);
     $router->post('/admin/support-tickets/{id}/reply', [AdminController::class, 'ticketReply']);
     $router->post('/admin/support-tickets/{id}/status', [AdminController::class, 'ticketStatus']);
     $router->get('/admin/feedback', [AdminController::class, 'feedbackList']);
     $router->post('/admin/feedback/{id}/status', [AdminController::class, 'feedbackStatus']);
+
+    // Notifications
+    $router->get('/admin/notifications', [AdminController::class, 'notifications']);
+    $router->get('/admin/notifications/unread-count', [AdminController::class, 'unreadCount']);
+    $router->post('/admin/notifications/{id}/read', [AdminController::class, 'markNotificationRead']);
+    $router->post('/admin/notifications/mark-all-read', [AdminController::class, 'markAllRead']);
 
     }); // end admin middleware group
 

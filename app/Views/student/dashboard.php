@@ -207,7 +207,13 @@ $user = \App\Core\Auth::user();
                         </div>
                         <?php
                         $status = $app['status'] ?? '';
-                        $sc = match($status) { 'approved' => 'badge-success', 'rejected' => 'badge-danger', 'screening','shortlisted','interview' => 'badge-warning', default => 'badge-info' };
+                        $sc = match($status) {
+                            'approved' => 'badge-success', 'rejected' => 'badge-danger',
+                            'screening','shortlisted','interview' => 'badge-warning',
+                            'document_required' => 'badge-info', 'submitted' => 'badge-info',
+                            'withdrawn','expired' => 'badge-surface', 'pending' => 'badge-warning',
+                            default => 'badge-surface'
+                        };
                         ?>
                         <span class="badge <?= $sc ?> shrink-0"><?= e(ucfirst(str_replace('_', ' ', $status))) ?></span>
                     </a>

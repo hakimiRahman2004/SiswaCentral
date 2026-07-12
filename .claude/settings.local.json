@@ -11,7 +11,10 @@
       "Bash(php -l app/Helpers/PlanGuard.php)",
       "Bash(php -l app/Middleware/PlanMiddleware.php)",
       "Bash(php -l app/Repositories/SupportTicketRepository.php)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(mysql -h 127.0.0.1 -u root '-pG7!kP9@xL2#vQ8$m' siswacentral -e 'SELECT DISTINCT status FROM scholarships; SELECT COUNT\\(*\\) as pending_count FROM scholarships WHERE status = '\\\\''pending'\\\\''; SELECT COUNT\\(*\\) as draft_count FROM scholarships WHERE status = '\\\\''draft'\\\\'';')",
+      "Bash(mysql -h 127.0.0.1 -u root '-pG7!kP9@xL2#vQ8$m' siswacentral -e 'SELECT id, title, message, created_at FROM notifications ORDER BY created_at DESC LIMIT 10;')",
+      "Bash(mysql -h 127.0.0.1 -u root '-pG7!kP9@xL2#vQ8$m' siswacentral -e 'SELECT id, company_name, is_verified, status FROM providers WHERE is_verified = 0 ORDER BY id;')"
     ]
   }
 }

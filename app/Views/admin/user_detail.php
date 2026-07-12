@@ -18,6 +18,6 @@
             <div class="p-3 bg-surface-50 rounded-xl"><dt class="text-surface-500 text-xs">Role</dt><dd class="font-medium text-surface-800"><?= e(ucfirst($user['role']??'')) ?></dd></div>
             <div class="p-3 bg-surface-50 rounded-xl"><dt class="text-surface-500 text-xs">Joined</dt><dd class="font-medium text-surface-800"><?= date('d M Y',strtotime($user['created_at'])) ?></dd></div>
         </dl>
-        <form method="POST" action="<?= url('/admin/users/' . e($user['id']) . '//toggle-status') ?>"><?= csrfField() ?><button type="submit" class="btn <?= ($user['status']??'')==='active' ? 'btn-outline text-red-500 border-red-300' : 'btn-primary' ?>" onclick="return confirm('Toggle user status?')"><?= ($user['status']??'')==='active' ? 'Suspend User' : 'Activate User' ?></button></form>
+        <form method="POST" action="<?= url('/admin/users/' . e($user['id']) . '/toggle-status') ?>"><?= csrfField() ?><button type="submit" class="btn <?= ($user['status']??'')==='active' ? 'btn-outline text-red-500 border-red-300' : 'btn-primary' ?>" onclick="return confirm('Toggle user status?')"><?= ($user['status']??'')==='active' ? 'Suspend User' : 'Activate User' ?></button></form>
     </div>
 </div>

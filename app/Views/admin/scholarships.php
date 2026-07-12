@@ -1,6 +1,7 @@
 <?php
 /** @var int $totalScholarships */
 /** @var int $activeScholarships */
+/** @var int $pendingCount */
 /** @var int $draftScholarships */
 /** @var int $closedScholarships */
 /** @var array<int, array<string, mixed>> $scholarships */
@@ -35,6 +36,13 @@ $title = 'Scholarship Management';
             <div class="stat-label">Draft</div>
         </div>
         <div class="stat-card">
+            <div class="stat-icon" style="background: var(--color-warning-50); color: var(--color-warning-600);">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+            </div>
+            <div class="stat-value" style="color: var(--color-warning-600);"><?= e($pendingCount ?? 0) ?></div>
+            <div class="stat-label">Pending Review</div>
+        </div>
+        <div class="stat-card">
             <div class="stat-icon" style="background: var(--color-danger-50); color: var(--color-danger-600);">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"/></svg>
             </div>
@@ -51,6 +59,7 @@ $title = 'Scholarship Management';
         <select name="status" class="input" style="width:auto" onchange="this.form.submit()">
             <option value="">All Status</option>
             <option value="open" <?= ($_GET['status']??'')==='open'?'selected':''?>>Open</option>
+            <option value="pending" <?= ($_GET['status']??'')==='pending'?'selected':''?>>Pending</option>
             <option value="draft" <?= ($_GET['status']??'')==='draft'?'selected':''?>>Draft</option>
             <option value="closed" <?= ($_GET['status']??'')==='closed'?'selected':''?>>Closed</option>
         </select>
@@ -65,7 +74,7 @@ $title = 'Scholarship Management';
                 <tr>
                     <td class="font-medium text-surface-800"><?= e($s['name']??'') ?></td>
                     <td class="text-sm text-surface-600"><?= e($s['provider_name']??'') ?></td>
-                    <td><span class="badge <?= match($s['status']??''){'open'=>'badge-success','draft'=>'badge-warning','closed'=>'badge-danger',default=>'badge-surface'} ?>"><?= e($s['status']??'') ?></span></td>
+                    <td><span class="badge <?= match($s['status']??''){'open'=>'badge-success','pending'=>'badge-warning','draft'=>'badge-warning','closed'=>'badge-danger',default=>'badge-surface'} ?>"><?= e($s['status']??'') ?></span></td>
                     <td class="font-medium"><?= e($s['application_count']??0) ?></td>
                     <td class="text-xs text-surface-500"><?= e($s['deadline']??'') ?></td>
                     <td><a href="<?= url('/admin/scholarships/' . e($s['id'])) ?>" class="btn btn-ghost btn-sm">View</a></td>

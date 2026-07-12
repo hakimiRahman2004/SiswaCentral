@@ -22,7 +22,7 @@ $title = $isEdit ? 'Edit Scholarship' : 'Create Scholarship';
     </div>
     <?php endif; ?>
 
-    <form method="POST" action="<?= $isEdit ? '/provider/scholarships/'.e($scholarship['id']).'/edit' : '/provider/scholarships/create' ?>" class="card-hover p-6">
+    <form method="POST" action="<?= $isEdit ? '/provider/scholarships/'.e($scholarship['id']).'/edit' : '/provider/scholarships/create' ?>" class="card-hover p-6" enctype="multipart/form-data">
         <?= csrfField() ?>
         <div class="grid gap-4 sm:grid-cols-2">
             <div class="sm:col-span-2">
@@ -57,9 +57,36 @@ $title = $isEdit ? 'Edit Scholarship' : 'Create Scholarship';
                 <label class="input-label">Description</label>
                 <textarea name="description" rows="5" class="input" placeholder="Describe the scholarship opportunity in detail..."><?= e(old('description', $scholarship['description'] ?? '')) ?></textarea>
             </div>
+
+            <!-- Supporting Documents -->
+            <div class="sm:col-span-2">
+                <div class="section-header">
+                    <h2 class="section-title">Supporting Documents</h2>
+                </div>
+                <p class="text-sm text-surface-500 mb-2">Upload documents for admin review (e.g., company registration, scholarship criteria, T&amp;Cs).</p>
+
+                <?php if ($isEdit && !empty($documents)): ?>
+                <div class="mb-3 space-y-2">
+                    <?php foreach ($documents as $doc): ?>
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-surface-50">
+                        <span class="text-sm text-surface-700"><?= e($doc['original_name']) ?></span>
+                        <form method="POST" action="<?= url('/provider/scholarships/doc/' . e($doc['id']) . '/delete') ?>" style="display:inline" onsubmit="return confirm('Remove this document?')">
+                            <?= csrfField() ?>
+                            <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--color-danger-500)">Remove</button>
+                        </form>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+
+                <div class="border-2 border-dashed border-surface-300 rounded-xl p-4 text-center hover:border-primary-400 transition-colors">
+                    <input type="file" name="documents[]" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="w-full text-sm text-surface-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100">
+                    <p class="text-xs text-surface-400 mt-1">PDF, DOC, or images. Max 5MB each.</p>
+                </div>
+            </div>
         </div>
         <div class="flex gap-3 mt-6">
-            <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Update Scholarship' : 'Create Scholarship' ?></button>
+            <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Update Scholarship' : 'Submit for Review' ?></button>
             <a href="<?= url('/provider/scholarships') ?>" class="btn btn-outline">Cancel</a>
         </div>
     </form>
